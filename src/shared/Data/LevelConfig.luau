@@ -27,7 +27,7 @@ function LevelConfig.GetEXPForNextLevel(currentLevel: number): number
 	return math.floor(100 * ((currentLevel + 1) ^ 1.35))
 end
 
--- Menghitung Kapasitas Maksimal Inventaris berdasarkan Level Player
+-- Menghitung Kapasitas Maksimal Inventaris (Jumlah Item) berdasarkan Level Player
 function LevelConfig.GetMaxInventoryCapacity(currentLevel: number): number
 	if currentLevel <= 10 then
 		return 100
@@ -38,6 +38,11 @@ function LevelConfig.GetMaxInventoryCapacity(currentLevel: number): number
 	else
 		return 750
 	end
+end
+
+-- Menghitung Kapasitas Maksimal Berat Inventaris (kg) berdasarkan Level Player
+function LevelConfig.GetMaxWeightCapacity(currentLevel: number): number
+	return 50 + (currentLevel * 10)
 end
 
 -- Menghitung EXP yang didapat dari item berdasarkan Rarity

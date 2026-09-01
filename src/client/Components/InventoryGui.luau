@@ -2,6 +2,7 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage.Packages
 local Roact = require(Packages.Roact)
+local RoactRodux = require(Packages.RoactRodux)
 local Items = require(ReplicatedStorage.Shared.Data.Items) :: any
 local LevelConfig = require(ReplicatedStorage.Shared.Data.LevelConfig) :: any
 
@@ -25,112 +26,84 @@ function InventoryGui:render()
 	local onSellAll = self.props.OnSellAll
 
 	local maxCapacity = LevelConfig.GetMaxInventoryCapacity(level)
+	local maxWeight = LevelConfig.GetMaxWeightCapacity(level)
 	local totalItems = 0
+	local totalWeight = 0
 	local totalValue = 0
 	local itemCards = {}
 
-	for itemId, count in pairs(inventory) do
-		if count > 0 then
-			totalItems += count
-			local unitPrice = Items.GetSellPrice(itemId)
-			totalValue += (unitPrice * count)
+	for index, itemData in ipairs(inventory) do
+		local itemId = if typeof(itemData) == "table" then itemData.ItemId else itemData
+		local uuid = if typeof(itemData) == "table" then itemData.UUID else tostring(index)
+		local weight = if typeof(itemData) == "table" and itemData.Weight then itemData.Weight else Items.GetItemWeight(itemId)
 
-			local itemDef = Items.Dict[itemId] or { Name = itemId, Rarity = "Common" }
-			local rarityColor = RarityColors[itemDef.Rarity] or RarityColors.Common
+		totalItems += 1
+		local unitPrice = Items.GetSellPrice(itemId)
+		totalValue += unitPrice
+		totalWeight += weight
 
-			itemCards[itemId] = Roact.createElement("Frame", {
-				BackgroundColor3 = Color3.fromRGB(28, 33, 46),
-				BorderSizePixel = 0,
+		local itemDef = Items.Dict[itemId] or { Name = itemId, Rarity = "Common" }
+		local rarityColor = RarityColors[itemDef.Rarity] or RarityColors.Common
+		local cardKey = uuid or string.format("%s_%d", itemId, index)
+
+		itemCards[cardKey] = Roact.createElement("Frame", {
+			BackgroundColor3 = Color3.fromRGB(28, 33, 46),
+			BorderSizePixel = 0,
+		}, {
+			UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+			UIStroke = Roact.createElement("UIStroke", {
+				Color = rarityColor,
+				Thickness = 1.5,
+			}),
+
+			-- Item Name
+			NameLabel = Roact.createElement("TextLabel", {
+				Position = UDim2.fromOffset(10, 10),
+				Size = UDim2.new(1, -20, 0, 25),
+				BackgroundTransparency = 1,
+				Text = itemDef.Name,
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 14,
+				Font = Enum.Font.GothamBold,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+
+			-- Rarity Tag, Unit Price & Unit Weight
+			DetailsLabel = Roact.createElement("TextLabel", {
+				Position = UDim2.fromOffset(10, 36),
+				Size = UDim2.new(1, -20, 0, 20),
+				BackgroundTransparency = 1,
+				Text = string.format("%s • 💰 %d • ⚖️ %.1fkg", string.upper(itemDef.Rarity), unitPrice, weight),
+				TextColor3 = rarityColor,
+				TextSize = 10,
+				Font = Enum.Font.GothamMedium,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			}),
+
+			-- Sell Button per Unique Item
+			SellButton = Roact.createElement("TextButton", {
+				Position = UDim2.fromOffset(10, 68),
+				Size = UDim2.new(1, -20, 0, 30),
+				BackgroundColor3 = Color3.fromRGB(46, 204, 113),
+				Text = string.format("SELL (💰 %d)", unitPrice),
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				TextSize = 12,
+				Font = Enum.Font.GothamBold,
+
+				[Roact.Event.Activated] = function()
+					if onSellItem then onSellItem(uuid or itemId, 1) end
+				end,
 			}, {
-				UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-				UIStroke = Roact.createElement("UIStroke", {
-					Color = rarityColor,
-					Thickness = 1.5,
-				}),
-
-				-- Count Badge (Top Right)
-				CountBadge = Roact.createElement("Frame", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -6, 0, 6),
-					Size = UDim2.fromOffset(40, 20),
-					BackgroundColor3 = Color3.fromRGB(15, 18, 26),
-				}, {
-					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
-					CountText = Roact.createElement("TextLabel", {
-						Size = UDim2.fromScale(1, 1),
-						BackgroundTransparency = 1,
-						Text = string.format("x%d", count),
-						TextColor3 = Color3.fromRGB(255, 255, 255),
-						TextSize = 11,
-						Font = Enum.Font.GothamBold,
-					}),
-				}),
-
-				-- Item Name
-				NameLabel = Roact.createElement("TextLabel", {
-					Position = UDim2.fromOffset(10, 10),
-					Size = UDim2.new(1, -55, 0, 25),
-					BackgroundTransparency = 1,
-					Text = itemDef.Name,
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBold,
-					TextXAlignment = Enum.TextXAlignment.Left,
-				}),
-
-				-- Rarity Tag & Unit Price
-				DetailsLabel = Roact.createElement("TextLabel", {
-					Position = UDim2.fromOffset(10, 36),
-					Size = UDim2.new(1, -20, 0, 20),
-					BackgroundTransparency = 1,
-					Text = string.format("%s • 💰 %d ea", string.upper(itemDef.Rarity), unitPrice),
-					TextColor3 = rarityColor,
-					TextSize = 11,
-					Font = Enum.Font.GothamMedium,
-					TextXAlignment = Enum.TextXAlignment.Left,
-				}),
-
-				-- Sell Single Button
-				SellOneButton = Roact.createElement("TextButton", {
-					Position = UDim2.fromOffset(10, 68),
-					Size = UDim2.new(0.48, -5, 0, 30),
-					BackgroundColor3 = Color3.fromRGB(46, 204, 113),
-					Text = "SELL x1",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 11,
-					Font = Enum.Font.GothamBold,
-
-					[Roact.Event.Activated] = function()
-						if onSellItem then onSellItem(itemId, 1) end
-					end,
-				}, {
-					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				}),
-
-				-- Sell All Stack Button
-				SellStackButton = Roact.createElement("TextButton", {
-					Position = UDim2.new(0.52, 0, 0, 68),
-					Size = UDim2.new(0.48, -10, 0, 30),
-					BackgroundColor3 = Color3.fromRGB(241, 196, 15),
-					Text = "SELL ALL",
-					TextColor3 = Color3.fromRGB(40, 30, 0),
-					TextSize = 11,
-					Font = Enum.Font.GothamBlack,
-
-					[Roact.Event.Activated] = function()
-						if onSellItem then onSellItem(itemId, count) end
-					end,
-				}, {
-					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				}),
-			})
-		end
+				UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+			}),
+		})
 	end
 
 	local isFull = totalItems >= maxCapacity
 
 	return Roact.createElement("ScreenGui", {
 		ResetOnSpawn = false,
+		IgnoreGuiInset = true,
 	}, {
 		-- Overlay Background
 		Overlay = Roact.createElement("Frame", {
@@ -173,20 +146,20 @@ function InventoryGui:render()
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
 
-				-- Capacity Pill Badge
+				-- Capacity & Weight Pill Badge
 				CapacityBadge = Roact.createElement("Frame", {
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.new(1, -160, 0.5, 0),
-					Size = UDim2.fromOffset(120, 32),
+					Size = UDim2.fromOffset(180, 32),
 					BackgroundColor3 = Color3.fromRGB(12, 15, 22),
 				}, {
 					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 16) }),
 					CapacityText = Roact.createElement("TextLabel", {
 						Size = UDim2.fromScale(1, 1),
 						BackgroundTransparency = 1,
-						Text = string.format("📦 %d / %d", totalItems, maxCapacity),
-						TextColor3 = isFull and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(46, 204, 113),
-						TextSize = 13,
+						Text = string.format("📦 %d/%d • ⚖️ %.1f/%.1fkg", totalItems, maxCapacity, totalWeight, maxWeight),
+						TextColor3 = (totalItems >= maxCapacity or totalWeight >= maxWeight) and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(46, 204, 113),
+						TextSize = 11,
 						Font = Enum.Font.GothamBold,
 					}),
 				}),
@@ -281,4 +254,10 @@ function ObjectAssign(target, source)
 	return target
 end
 
-return InventoryGui
+return RoactRodux.connect(function(state, props)
+	return {
+		Inventory = state.Inventory,
+		Coins = state.Coins,
+		Level = state.Level,
+	}
+end)(InventoryGui)

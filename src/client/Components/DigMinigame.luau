@@ -1,7 +1,9 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 local Packages = ReplicatedStorage.Packages
 local Roact = require(Packages.Roact)
+local DigMinigameHelper = require(script.Parent.Common.DigMinigameHelper)
 
 local DigMinigame = Roact.Component:extend("DigMinigame")
 
@@ -10,10 +12,19 @@ function DigMinigame:init()
 	self.state = {
 		timeRemaining = self.props.TimeLimit or 15,
 	}
+
+	-- Roact Refs untuk kontrol TweenService & UIGradient
+	self.clipFrameRef = Roact.createRef()
+	self.shovelRef = Roact.createRef()
+	self.timerIconRef = Roact.createRef()
+	self.uiGradientRef = Roact.createRef()
+	self.tapTextRef = Roact.createRef()
 end
 
 function DigMinigame:didMount()
 	self.running = true
+
+	-- 1. Countdown Timer Loop
 	task.spawn(function()
 		while self.running do
 			task.wait(0.2)
@@ -37,6 +48,187 @@ function DigMinigame:didMount()
 			end
 		end
 	end)
+
+	-- 2. Animasi Getar Jam Alarm Kartun (Cartoon Alarm Clock Ringing Loop)
+	task.spawn(function()
+		while self.running do
+			local timerIcon = self.timerIconRef:getValue()
+			if timerIcon then
+				local t1 = TweenService:Create(
+					timerIcon,
+					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{
+						Rotation = -16,
+					}
+				)
+				local t2 = TweenService:Create(
+					timerIcon,
+					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{
+						Rotation = 16,
+					}
+				)
+				local t3 = TweenService:Create(
+					timerIcon,
+					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{
+						Rotation = -12,
+					}
+				)
+				local t4 = TweenService:Create(
+					timerIcon,
+					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+					{
+						Rotation = 12,
+					}
+				)
+				local t5 = TweenService:Create(
+					timerIcon,
+					TweenInfo.new(0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+					{
+						Rotation = 0,
+					}
+				)
+
+				t1:Play()
+				t1.Completed:Wait()
+				t2:Play()
+				t2.Completed:Wait()
+				t3:Play()
+				t3.Completed:Wait()
+				t4:Play()
+				t4.Completed:Wait()
+				t5:Play()
+				t5.Completed:Wait()
+			end
+			task.wait(0.55)
+		end
+	end)
+
+	-- 3. Animasi Idle Pulse Lembut Teks "TAP"
+	task.spawn(function()
+		while self.running do
+			local tapText = self.tapTextRef:getValue()
+			if tapText then
+				local breatheIn = TweenService:Create(
+					tapText,
+					TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+					{
+						Size = UDim2.fromScale(0.38, 0.80),
+					}
+				)
+				breatheIn:Play()
+				breatheIn.Completed:Wait()
+
+				local breatheOut = TweenService:Create(
+					tapText,
+					TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+					{
+						Size = UDim2.fromScale(0.32, 0.70),
+					}
+				)
+				breatheOut:Play()
+				breatheOut.Completed:Wait()
+			else
+				task.wait(0.2)
+			end
+		end
+	end)
+end
+
+function DigMinigame:didUpdate(previousProps)
+	local currentHp = self.props.CurrentHp or 100
+	local prevHp = previousProps.CurrentHp or 100
+	local maxHp = self.props.MaxHp or 100
+
+	local hpRatio = math.clamp(currentHp / maxHp, 0, 1)
+	local progress = 1 - hpRatio
+
+	-- 1. Tweening Halus Penambahan Progress Bar (Smooth Bar Action)
+	local clipFrame = self.clipFrameRef:getValue()
+	if clipFrame then
+		local barTween =
+			TweenService:Create(clipFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Size = UDim2.new(progress, 0, 1, 0),
+			})
+		barTween:Play()
+	end
+
+	-- Update UIGradient fade dinamis mengikuti progress dan batas hpRatio (0.8 -> 0.5)
+	local uiGradient = self.uiGradientRef:getValue()
+	if uiGradient then
+		uiGradient.Transparency = DigMinigameHelper.GetFadeTransparencySequence(progress, hpRatio)
+	end
+
+	-- 2. Animasi Shovel (Getar Kiri-Kanan, Pop-Up Membesar & Efek Impact berbasis Skala)
+	local shovel = self.shovelRef:getValue()
+	if shovel then
+		-- Tween pergeseran posisi X mengikuti ujung bar
+		TweenService:Create(shovel, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			Position = UDim2.new(progress, 0, 0.5, 0),
+		}):Play()
+
+		-- Efek Getar & Impact saat HP berkurang (klik gali)
+		if currentHp < prevHp then
+			-- Impact Pop Sekop: Membesar seketika dan mengayun ke belakang
+			shovel.Size = UDim2.fromScale(0.15, 1.6)
+			shovel.Rotation = -32
+
+			-- Getaran Step 1 (Ayun ke Kanan)
+			local shake1 =
+				TweenService:Create(shovel, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+					Rotation = 18,
+					Size = UDim2.fromScale(0.14, 1.5),
+				})
+			shake1:Play()
+
+			shake1.Completed:Connect(function()
+				-- Getaran Step 2 (Ayun ke Kiri)
+				local shake2 =
+					TweenService:Create(shovel, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+						Rotation = -22,
+						Size = UDim2.fromScale(0.13, 1.4),
+					})
+				shake2:Play()
+
+				shake2.Completed:Connect(function()
+					-- Kembali ke posisi istirahat normal (Bounce Back)
+					TweenService:Create(shovel, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+						Rotation = -10,
+						Size = UDim2.fromScale(0.12, 1.35),
+					}):Play()
+				end)
+			end)
+		end
+	end
+
+	-- 3. Animasi Getar & Impact Teks "TAP" di Tengah Saat Diklik
+	local tapText = self.tapTextRef:getValue()
+	if tapText and currentHp < prevHp then
+		tapText.Size = UDim2.fromScale(0.44, 0.92)
+		tapText.Rotation = -8
+
+		local tapShake = TweenService:Create(
+			tapText,
+			TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{
+				Rotation = 6,
+				Size = UDim2.fromScale(0.38, 0.82),
+			}
+		)
+		tapShake:Play()
+
+		tapShake.Completed:Connect(function()
+			TweenService:Create(
+				tapText,
+				TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+				{
+					Rotation = 0,
+					Size = UDim2.fromScale(0.35, 0.75),
+				}
+			):Play()
+		end)
+	end
 end
 
 function DigMinigame:willUnmount()
@@ -46,142 +238,53 @@ end
 function DigMinigame:render()
 	local currentHp = self.props.CurrentHp or 100
 	local maxHp = self.props.MaxHp or 100
-	local rarity = self.props.Rarity or "Common"
-	local itemName = self.props.ItemName or "Unknown Item"
-	local minPower = self.props.MinDigPower or 5
-	local shovelPower = self.props.ShovelPower or 10
 	local isTooWeak = self.props.IsTooWeak or false
 	local onSwing = self.props.OnSwing
-	local onCancel = self.props.OnCancel
 	local timeRemaining = self.state.timeRemaining
 
-	local hpPercent = math.clamp(currentHp / maxHp, 0, 1)
+	local hpRatio = math.clamp(currentHp / maxHp, 0, 1)
+	local progress = 1 - hpRatio
 
-	local rarityColors = {
-		Common = Color3.fromRGB(180, 180, 180),
-		Uncommon = Color3.fromRGB(46, 204, 113),
-		Rare = Color3.fromRGB(52, 152, 219),
-		Epic = Color3.fromRGB(155, 89, 182),
-		Legendary = Color3.fromRGB(241, 196, 15),
-		Secret = Color3.fromRGB(231, 76, 60),
-	}
-
-	local activeColor = rarityColors[rarity] or rarityColors.Common
-
-	local btnText = isTooWeak and "❌ SHOVEL TOO WEAK!" or "⚡ DIG NODE!"
-	local btnColor = isTooWeak and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(46, 204, 113)
-	local btnTextColor = Color3.fromRGB(255, 255, 255)
+	-- Asset IDs
+	local outerContainerAsset = "rbxassetid://77990043906183" -- Container Frame Luar
+	local innerProgressBarAsset = "rbxassetid://105807504905048" -- Progress Bar Hijau Dalam
+	local countdownAsset = "rbxassetid://126607445864603" -- Countdown Merah Bawah
+	local timerIconAsset = "rbxassetid://109376754540674" -- Logo Timer Icon
+	local shovelAsset = "rbxassetid://81621266214171" -- Shovel Icon Indicator
 
 	return Roact.createElement("ScreenGui", {
 		ResetOnSpawn = false,
+		DisplayOrder = 20,
 	}, {
-		MainFrame = Roact.createElement("Frame", {
-			AnchorPoint = Vector2.new(0.5, 0.85),
-			Position = UDim2.fromScale(0.5, 0.85),
-			Size = UDim2.fromOffset(360, 185),
-			BackgroundColor3 = Color3.fromRGB(18, 22, 30),
+		-- Container Utama Minigame (Responsif berbasis Scale untuk semua layar HP / PC)
+		MainContainer = Roact.createElement("Frame", {
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.fromScale(0.5, 0.76),
+			Size = UDim2.fromScale(0.65, 0.088),
+			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 		}, {
-			UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 14) }),
-			UIStroke = Roact.createElement("UIStroke", {
-				Color = isTooWeak and Color3.fromRGB(231, 76, 60) or activeColor,
-				Thickness = 2,
+			-- Constraint Rasio Aspek agar bentuk bar selalu proporsional dan tidak gepeng di HP
+			UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
+				AspectRatio = 7.05,
+				DominantAxis = Enum.DominantAxis.Width,
 			}),
 
-			-- Title Banner & Rarity Tag
-			HeaderFrame = Roact.createElement("Frame", {
-				Size = UDim2.new(1, 0, 0, 36),
+			-- Batasan Ukuran Minimum (Layar HP Kecil) & Maksimum (Monitor Desktop)
+			UISizeConstraint = Roact.createElement("UISizeConstraint", {
+				MinSize = Vector2.new(280, 40),
+				MaxSize = Vector2.new(540, 76),
+			}),
+
+			-- 1. Bagian Luar: Container Progress Bar
+			OuterContainer = Roact.createElement("ImageButton", {
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.5),
+				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
-			}, {
-				RarityBadge = Roact.createElement("TextLabel", {
-					Position = UDim2.fromOffset(15, 8),
-					Size = UDim2.new(1, -65, 0, 24),
-					BackgroundTransparency = 1,
-					Text = string.format("%s • %s", string.upper(rarity), itemName),
-					TextColor3 = activeColor,
-					TextSize = 15,
-					Font = Enum.Font.GothamBlack,
-					TextXAlignment = Enum.TextXAlignment.Left,
-				}),
-
-				-- Tombol Cancel / Close (✕)
-				CloseButton = Roact.createElement("TextButton", {
-					AnchorPoint = Vector2.new(1, 0),
-					Position = UDim2.new(1, -8, 0, 8),
-					Size = UDim2.fromOffset(26, 26),
-					BackgroundColor3 = Color3.fromRGB(231, 76, 60),
-					Text = "✕",
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 14,
-					Font = Enum.Font.GothamBlack,
-
-					[Roact.Event.Activated] = function()
-						if onCancel then
-							onCancel()
-						end
-					end,
-				}, {
-					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 13) }),
-				}),
-			}),
-
-			-- Shovel Power vs Required Weight Info
-			PowerRequirementLabel = Roact.createElement("TextLabel", {
-				Position = UDim2.fromOffset(15, 38),
-				Size = UDim2.new(1, -30, 0, 18),
-				BackgroundTransparency = 1,
-				Text = string.format("⚡ Power Req: %d (Your Shovel: %d)", minPower, shovelPower),
-				TextColor3 = isTooWeak and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(200, 210, 225),
-				TextSize = 11,
-				Font = Enum.Font.GothamBold,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-
-			-- HP Resistance Bar
-			HpBarBackground = Roact.createElement("Frame", {
-				Position = UDim2.fromOffset(15, 62),
-				Size = UDim2.new(1, -30, 0, 22),
-				BackgroundColor3 = Color3.fromRGB(12, 15, 22),
-			}, {
-				UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				HpFill = Roact.createElement("Frame", {
-					Size = UDim2.fromScale(hpPercent, 1),
-					BackgroundColor3 = isTooWeak and Color3.fromRGB(231, 76, 60) or activeColor,
-				}, {
-					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-				}),
-				HpText = Roact.createElement("TextLabel", {
-					Size = UDim2.fromScale(1, 1),
-					BackgroundTransparency = 1,
-					Text = string.format("HP: %d / %d", currentHp, maxHp),
-					TextColor3 = Color3.fromRGB(255, 255, 255),
-					TextSize = 11,
-					Font = Enum.Font.GothamBold,
-				}),
-			}),
-
-			-- Warning Text & Live Hitung Mundur (Countdown Timer)
-			WarningLabel = Roact.createElement("TextLabel", {
-				Position = UDim2.fromOffset(15, 90),
-				Size = UDim2.new(1, -30, 0, 16),
-				BackgroundTransparency = 1,
-				Text = isTooWeak and "⚠️ Upgrade shovel at shop to dig this heavy item!" or string.format("⏱️ Time Remaining: %ds", timeRemaining),
-				TextColor3 = isTooWeak and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(241, 196, 15),
-				TextSize = 11,
-				Font = Enum.Font.GothamBold,
-			}),
-
-			-- Tombol Gali / Swing Shovel
-			SwingButton = Roact.createElement("TextButton", {
-				AnchorPoint = Vector2.new(0.5, 1),
-				Position = UDim2.new(0.5, 0, 1, -12),
-				Size = UDim2.new(1, -30, 0, 42),
-				BackgroundColor3 = btnColor,
-				Text = btnText,
-				TextColor3 = btnTextColor,
-				TextSize = 15,
-				Font = Enum.Font.GothamBlack,
-				AutoButtonColor = not isTooWeak,
+				Image = outerContainerAsset,
+				ScaleType = Enum.ScaleType.Stretch,
+				AutoButtonColor = false,
 
 				[Roact.Event.Activated] = function()
 					if not isTooWeak and onSwing then
@@ -189,7 +292,134 @@ function DigMinigame:render()
 					end
 				end,
 			}, {
-				UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 10) }),
+				-- Area Slot Dalam (Menggunakan Scale Responsif murni)
+				InnerSlotFrame = Roact.createElement("Frame", {
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.fromScale(0.5, 0.5),
+					Size = UDim2.fromScale(0.938, 0.59),
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+				}, {
+					-- Frame Pemotong (Clip Frame) yang dipotong dinamis & di-tween sesuai progress
+					ClipFrame = Roact.createElement("Frame", {
+						[Roact.Ref] = self.clipFrameRef,
+						AnchorPoint = Vector2.new(0, 0.5),
+						Position = UDim2.fromScale(0, 0.5),
+						Size = UDim2.new(progress, 0, 1, 0),
+						ClipsDescendants = true,
+						BackgroundTransparency = 1,
+						BorderSizePixel = 0,
+						ZIndex = 2,
+					}, {
+						-- 2. Bagian Dalam: Gambar Bar Hijau Glossy Berukuran Penuh dengan UIGradient Dinamis
+						InnerBarImage = Roact.createElement("ImageLabel", {
+							AnchorPoint = Vector2.new(0, 0.5),
+							Position = UDim2.fromScale(0, 0.5),
+							Size = UDim2.new(1 / math.max(progress, 0.0001), 0, 1, 0),
+							BackgroundTransparency = 1,
+							Image = innerProgressBarAsset,
+							ScaleType = Enum.ScaleType.Stretch,
+							ZIndex = 2,
+						}, {
+							-- UIGradient diletakkan langsung di dalam ImageLabel dengan keypoint dinamis yang selalu memudar di ujung potongan
+							UIGradient = Roact.createElement("UIGradient", {
+								[Roact.Ref] = self.uiGradientRef,
+								Rotation = 0,
+								Transparency = DigMinigameHelper.GetFadeTransparencySequence(progress, hpRatio),
+							}),
+						}),
+					}),
+
+					-- Teks "TAP" di Tengah Inner Progress Bar (ZIndex 4: Di Atas Bar Hijau, Di Bawah Sekop ZIndex 5)
+					TapText = Roact.createElement("TextLabel", {
+						[Roact.Ref] = self.tapTextRef,
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.fromScale(0.5, 0.5),
+						Size = UDim2.fromScale(0.35, 0.75),
+						BackgroundTransparency = 1,
+						Text = "TAP",
+						TextColor3 = Color3.fromRGB(255, 255, 255),
+						TextScaled = true,
+						Font = Enum.Font.LuckiestGuy,
+						TextXAlignment = Enum.TextXAlignment.Center,
+						TextYAlignment = Enum.TextYAlignment.Center,
+						ZIndex = 4,
+					}, {
+						UIStroke = Roact.createElement("UIStroke", {
+							Color = Color3.fromRGB(0, 0, 0),
+							Thickness = 2.0,
+						}),
+						UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
+							AspectRatio = 2.5,
+						}),
+					}),
+
+					-- 4. Shovel Marker Indicator (Bergerak, membesar & bergetar dengan TweenService berbasis Skala)
+					ShovelMarker = Roact.createElement("ImageLabel", {
+						[Roact.Ref] = self.shovelRef,
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.new(progress, 0, 0.5, 0),
+						Size = UDim2.fromScale(0.12, 1.35),
+						Rotation = -10,
+						BackgroundTransparency = 1,
+						Image = shovelAsset,
+						ZIndex = 5,
+					}, {
+						UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
+							AspectRatio = 1.0,
+						}),
+					}),
+				}),
+			}),
+
+			-- 3. Bagian Countdown Merah (Anchor Point di x: 0, y: 1 di bawah container luar berbasis Skala)
+			CountdownContainer = Roact.createElement("ImageLabel", {
+				AnchorPoint = Vector2.new(0, 1),
+				Position = UDim2.fromScale(0, 1.575),
+				Size = UDim2.fromScale(0.32, 0.58),
+				BackgroundTransparency = 1,
+				Image = countdownAsset,
+				ScaleType = Enum.ScaleType.Fit,
+			}, {
+				UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
+					AspectRatio = 3.8,
+					DominantAxis = Enum.DominantAxis.Height,
+				}),
+
+				-- Logo Timer Icon
+				TimerIcon = Roact.createElement("ImageLabel", {
+					[Roact.Ref] = self.timerIconRef,
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.fromScale(-0.12, 0.4),
+					Size = UDim2.fromScale(1, 1.55),
+					BackgroundTransparency = 1,
+					Image = timerIconAsset,
+					ZIndex = 3,
+				}, {
+					UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
+						AspectRatio = 1.0,
+					}),
+				}),
+
+				-- Teks Waktu (Menggunakan Font Global LuckiestGuy dan TextScaled = true)
+				TimeText = Roact.createElement("TextLabel", {
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.fromScale(0.3, 0.5),
+					Size = UDim2.fromScale(0.7, 0.5),
+					BackgroundTransparency = 1,
+					Text = string.format("Time : %ds", timeRemaining),
+					TextColor3 = Color3.fromRGB(255, 255, 255),
+					TextScaled = true,
+					Font = Enum.Font.LuckiestGuy,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Center,
+					ZIndex = 2,
+				}, {
+					UIStroke = Roact.createElement("UIStroke", {
+						Color = Color3.fromRGB(0, 0, 0),
+						Thickness = 1.5,
+					}),
+				}),
 			}),
 		}),
 	})

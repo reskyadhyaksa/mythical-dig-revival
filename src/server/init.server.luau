@@ -3,10 +3,10 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LevelConfig = require(ReplicatedStorage.Shared.Data.LevelConfig) :: any
 local Shovels = require(ReplicatedStorage.Shared.Data.Shovels) :: any
+local DataService = require(script.Services.DataService) :: any
+local NameplateService = require(script.Services.NameplateService) :: any
 local InventoryService = require(script.Services.InventoryService) :: any
 local DigService = require(script.Services.DigService) :: any
-
-local playerProfiles: { [Player]: any } = {}
 
 -- Setup RemoteEvents & RemoteFunctions di ReplicatedStorage
 local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
@@ -44,15 +44,34 @@ local sellItemRE = GetOrCreateRemoteEvent("SellItem")
 local sellAllRE = GetOrCreateRemoteEvent("SellAll")
 local buyShovelRE = GetOrCreateRemoteEvent("BuyShovel")
 local equipShovelRE = GetOrCreateRemoteEvent("EquipShovel")
+local equipItemRE = GetOrCreateRemoteEvent("EquipItem")
+local playerDataLoadedRE = GetOrCreateRemoteEvent("PlayerDataLoaded")
 
 cancelDigRE.OnServerEvent:Connect(function(player: Player)
 	DigService.CancelDig(player)
 end)
 
--- Data request dari Client UI
+equipItemRE.OnServerEvent:Connect(function(player: Player, itemId: string)
+	local profile = DataService.GetProfile(player)
+	if profile and profile.Data and profile.Data.Inventory and (profile.Data.Inventory[itemId] or 0) > 0 then
+		if player.Character then
+			InventoryService.EquipItemModel(player.Character, itemId)
+		end
+	end
+end)
+
+-- Data request dari Client UI (Memuat Coins & Level tersimpan)
 getPlayerDataRF.OnServerInvoke = function(player: Player)
-	local profile = playerProfiles[player]
-	if profile then
+	local profile = DataService.GetProfile(player)
+	local attempts = 0
+	-- Tunggu hingga profile selesai dimuat dari DataStore jika client me-request di frame 1
+	while (not profile or not profile.Data) and attempts < 35 and player:IsDescendantOf(Players) do
+		task.wait(0.1)
+		attempts += 1
+		profile = DataService.GetProfile(player)
+	end
+
+	if profile and profile.Data then
 		return profile.Data
 	end
 	return nil
@@ -60,7 +79,7 @@ end
 
 -- Mulai galian
 startDigRF.OnServerInvoke = function(player: Player)
-	local profile = playerProfiles[player]
+	local profile = DataService.GetProfile(player)
 	if not profile then return nil end
 
 	local activeDig = DigService.StartDigNode(player, profile)
@@ -82,7 +101,7 @@ end
 
 -- Swing Sekop (Return state HP galian terbaru ke Client)
 swingShovelRF.OnServerInvoke = function(player: Player)
-	local profile = playerProfiles[player]
+	local profile = DataService.GetProfile(player)
 	if not profile then return nil end
 
 	DigService.SwingShovel(player, profile)
@@ -105,14 +124,14 @@ end
 
 -- Jual Item
 sellItemRE.OnServerEvent:Connect(function(player: Player, itemId: string, amount: number)
-	local profile = playerProfiles[player]
+	local profile = DataService.GetProfile(player)
 	if profile then
 		InventoryService.SellItem(player, profile, itemId, amount)
 	end
 end)
 
 sellAllRE.OnServerEvent:Connect(function(player: Player)
-	local profile = playerProfiles[player]
+	local profile = DataService.GetProfile(player)
 	if profile then
 		InventoryService.SellAll(player, profile)
 	end
@@ -120,7 +139,7 @@ end)
 
 -- Beli Sekop
 buyShovelRE.OnServerEvent:Connect(function(player: Player, shovelId: string)
-	local profile = playerProfiles[player]
+	local profile = DataService.GetProfile(player)
 	if not profile or not profile.Data then return end
 
 	local shovelDef = Shovels.GetShovel(shovelId)
@@ -136,48 +155,47 @@ buyShovelRE.OnServerEvent:Connect(function(player: Player, shovelId: string)
 		profile.Data.Coins = currentCoins - price
 		table.insert(profile.Data.OwnedShovels, shovelId)
 		InventoryService.EquipShovel(player, profile, shovelId)
-		print(string.format("🛒 Player bought %s for %d Coins!", shovelDef.Name, price))
+		print(string.format("🛒 Player %s bought %s for %d Coins!", player.Name, shovelDef.Name, price))
 	end
 end)
 
 -- Pasang Sekop
 equipShovelRE.OnServerEvent:Connect(function(player: Player, shovelId: string)
-	local profile = playerProfiles[player]
+	local profile = DataService.GetProfile(player)
 	if profile then
 		InventoryService.EquipShovel(player, profile, shovelId)
 	end
 end)
 
 local function OnPlayerAdded(player: Player)
-	-- Inisialisasi Data Default Player (WoodenShovel sebagai sekop bawaan level 0)
-	playerProfiles[player] = {
-		Data = {
-			Level = LevelConfig.DefaultProfileData.Level,
-			EXP = LevelConfig.DefaultProfileData.EXP,
-			Coins = LevelConfig.DefaultProfileData.Coins,
-			OwnedShovels = { "WoodenShovel" },
-			EquippedShovel = "WoodenShovel",
-			Inventory = {},
-		},
-	}
+	-- Inisialisasi DataStore Persistent via ProfileService
+	local profile = DataService.OnPlayerAdded(player)
+	if profile and profile.Data then
+		playerDataLoadedRE:FireClient(player, profile.Data)
+	end
 
-	-- Pasang fisik sekop WoodenShovel saat karakter player muncul/respawn
+	-- Taruh sekop di Backpack & buat Overhead Nameplate saat karakter player muncul/respawn (tanpa auto-equip ke tangan)
 	player.CharacterAdded:Connect(function(character: Model)
 		task.wait(0.2)
-		local profile = playerProfiles[player]
-		if profile and profile.Data then
-			local equippedShovel = profile.Data.EquippedShovel or "WoodenShovel"
-			InventoryService.EquipShovelModel(character, equippedShovel)
+		local currentProfile = DataService.GetProfile(player)
+		if currentProfile and currentProfile.Data then
+			local equippedShovel = currentProfile.Data.EquippedShovel or "WoodenShovel"
+			local level = currentProfile.Data.Level or 0
+			InventoryService.GiveShovelToBackpack(player, equippedShovel)
+			NameplateService.CreateNameplate(player, character, level)
 		end
 	end)
 
 	if player.Character then
-		InventoryService.EquipShovelModel(player.Character, "WoodenShovel")
+		local equippedShovel = profile and profile.Data and profile.Data.EquippedShovel or "WoodenShovel"
+		local level = profile and profile.Data and profile.Data.Level or 0
+		InventoryService.GiveShovelToBackpack(player, equippedShovel)
+		NameplateService.CreateNameplate(player, player.Character, level)
 	end
 end
 
 local function OnPlayerRemoving(player: Player)
-	playerProfiles[player] = nil
+	DataService.OnPlayerRemoving(player)
 end
 
 Players.PlayerAdded:Connect(OnPlayerAdded)
@@ -187,4 +205,4 @@ for _, player in Players:GetPlayers() do
 	task.spawn(OnPlayerAdded, player)
 end
 
-print("🚀 Server initialized! Remotes and auto-equip active.")
+print("🚀 Server DataStore initialized! Persistent Coins, Level & Inventory active.")

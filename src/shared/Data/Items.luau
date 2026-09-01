@@ -12,6 +12,7 @@ export type ItemDef = {
 	SellPrice: number?, -- Harga jual item ke Toko / Sell UI (opsional)
 	MinDigPower: number?, -- Kekuatan sekop minimal yang dibutuhkan
 	TimeLimit: number?, -- Batas waktu minigame (detik) sebelum item lepas/rusak
+	Weight: number?, -- Berat item dalam kg (opsional, jika kosong menggunakan default berdasarkan Rarity)
 }
 
 local RarityBaseHP: { [RarityType]: number } = {
@@ -48,6 +49,15 @@ local RarityBaseTimeLimit: { [RarityType]: number } = {
 	Epic = 10,
 	Legendary = 8,
 	Secret = 6,
+}
+
+local RarityBaseWeight: { [RarityType]: number } = {
+	Common = 1.5,
+	Uncommon = 4.0,
+	Rare = 10.0,
+	Epic = 25.0,
+	Legendary = 50.0,
+	Secret = 150.0,
 }
 
 local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
@@ -169,6 +179,54 @@ function ItemsModule.GetTimeLimit(itemId: string): number
 	end
 
 	return RarityBaseTimeLimit[item.Rarity] or 15
+end
+
+-- Mendapatkan berat 1 unit item (kg)
+function ItemsModule.GetItemWeight(itemId: string): number
+	local item = Items[itemId]
+	if not item then
+		return 1.0
+	end
+
+	if item.Weight then
+		return item.Weight
+	end
+
+	return RarityBaseWeight[item.Rarity] or 1.0
+end
+
+-- Menghitung total berat seluruh isi inventaris (kg)
+function ItemsModule.GetTotalInventoryWeight(inventory: any): number
+	if not inventory or typeof(inventory) ~= "table" then
+		return 0
+	end
+
+	local totalWeight = 0
+
+	if #inventory > 0 then
+		-- Array inventaris berbasis UUID unik
+		for _, item in ipairs(inventory) do
+			if typeof(item) == "table" then
+				if item.Weight then
+					totalWeight += item.Weight
+				elseif item.ItemId then
+					totalWeight += ItemsModule.GetItemWeight(item.ItemId)
+				end
+			elseif typeof(item) == "string" then
+				totalWeight += ItemsModule.GetItemWeight(item)
+			end
+		end
+	else
+		-- Fallback key-value dictionary (legacy support)
+		for itemId, count in pairs(inventory) do
+			if typeof(count) == "number" and count > 0 then
+				local unitWeight = ItemsModule.GetItemWeight(itemId)
+				totalWeight += (unitWeight * count)
+			end
+		end
+	end
+
+	return totalWeight
 end
 
 function ItemsModule.GetRandomItem(islandId: string?, forcedTier: RarityType?, groundMaterial: string?): ItemDef

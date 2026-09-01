@@ -2,15 +2,15 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Roact = require(ReplicatedStorage.Packages.Roact)
-local SideMenuGui = require(script.Parent.Parent.Components.SideMenuGui)
+local RightMenuGui = require(script.Parent.Parent.Components.RightMenuGui)
 
-local SideMenuController = {}
+local RightMenuController = {}
 local currentHandle: any = nil
 
-function SideMenuController.MountSideMenu(onOpenInventory: () -> (), onOpenShop: () -> ())
+function RightMenuController.MountRightMenu(onOpenInventory: () -> (), onOpenShop: () -> ())
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
-	local element = Roact.createElement(SideMenuGui, {
+	local element = Roact.createElement(RightMenuGui, {
 		OnOpenInventory = onOpenInventory,
 		OnOpenShop = onOpenShop,
 	})
@@ -19,14 +19,14 @@ function SideMenuController.MountSideMenu(onOpenInventory: () -> (), onOpenShop:
 		Roact.unmount(currentHandle)
 	end
 
-	currentHandle = Roact.mount(element, playerGui, "SideMenuUI")
+	currentHandle = Roact.mount(element, playerGui, "RightMenuUI")
 end
 
-function SideMenuController.UnmountSideMenu()
+function RightMenuController.UnmountRightMenu()
 	if currentHandle then
 		Roact.unmount(currentHandle)
 		currentHandle = nil
 	end
 end
 
-return SideMenuController
+return RightMenuController

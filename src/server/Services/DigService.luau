@@ -40,13 +40,15 @@ function DigService.StartDigNode(player: Player, playerProfile: any): ActiveDigS
 		return activeDigs[player]
 	end
 
-	-- Cek Batas Maksimal Kapasitas Inventaris Player Berdasarkan Level
+	-- Cek Batas Maksimal Kapasitas (Jumlah Item & Total Berat) Berdasarkan Level Player
 	local playerLevel = playerProfile.Data and playerProfile.Data.Level or 0
 	local maxCapacity = LevelConfig.GetMaxInventoryCapacity(playerLevel)
+	local maxWeight = LevelConfig.GetMaxWeightCapacity(playerLevel)
 	local currentCount = InventoryService.GetTotalItemCount(playerProfile.Data and playerProfile.Data.Inventory)
+	local currentWeight = Items.GetTotalInventoryWeight(playerProfile.Data and playerProfile.Data.Inventory)
 
-	if currentCount >= maxCapacity then
-		print("⚠️ INVENTORY FULL! Clean up inventory before digging.")
+	if currentCount >= maxCapacity or currentWeight >= maxWeight then
+		print(string.format("⚠️ INVENTORY OVERWEIGHT/FULL! (Items: %d/%d | Weight: %.1f/%.1f kg)", currentCount, maxCapacity, currentWeight, maxWeight))
 		return nil
 	end
 
@@ -127,12 +129,11 @@ function DigService.SwingShovel(player: Player, playerProfile: any)
 
 	if digState.CurrentHP <= 0 then
 		local item = digState.TargetItem
-		local currentCount = playerProfile.Data.Inventory[item.Id] or 0
-		playerProfile.Data.Inventory[item.Id] = currentCount + 1
+		InventoryService.AddItem(playerProfile, item.Id)
 
 		-- Berikan EXP berdasarkan Rarity Item
 		local expGained = LevelConfig.GetEXPFromRarity(item.Rarity)
-		LevelService.AddEXP(playerProfile, expGained)
+		LevelService.AddEXP(playerProfile, expGained, player)
 
 		-- Spawn 3D Model visual effect (Melompat ke atas, jatuh ke belakang player & hilang setelah 2 detik)
 		if player.Character then
