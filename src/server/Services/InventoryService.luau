@@ -173,7 +173,7 @@ function InventoryService.EquipShovelModel(character: Model, shovelId: string)
 end
 
 -- Equip Item dari ReplicatedStorage.Assets.Items dengan Skala Ukuran Berdasarkan Weight
-function InventoryService.EquipItemModel(character: Model, itemId: string)
+function InventoryService.EquipItemModel(character: Model, itemId: string, uuid: string?)
 	local Players = game:GetService("Players")
 	local player = Players:GetPlayerFromCharacter(character)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
@@ -237,6 +237,9 @@ function InventoryService.EquipItemModel(character: Model, itemId: string)
 	end
 
 	if itemTool then
+		if uuid and uuid ~= "" then
+			itemTool:SetAttribute("UUID", uuid)
+		end
 		InventoryService.AutoWeldTool(itemTool)
 
 		if backpack and humanoid then

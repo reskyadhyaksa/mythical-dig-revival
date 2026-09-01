@@ -51,11 +51,24 @@ cancelDigRE.OnServerEvent:Connect(function(player: Player)
 	DigService.CancelDig(player)
 end)
 
-equipItemRE.OnServerEvent:Connect(function(player: Player, itemId: string)
+equipItemRE.OnServerEvent:Connect(function(player: Player, itemId: string, uuid: string?)
 	local profile = DataService.GetProfile(player)
-	if profile and profile.Data and profile.Data.Inventory and (profile.Data.Inventory[itemId] or 0) > 0 then
-		if player.Character then
-			InventoryService.EquipItemModel(player.Character, itemId)
+	if profile and profile.Data and profile.Data.Inventory then
+		local hasItem = false
+		for _, item in ipairs(profile.Data.Inventory) do
+			if typeof(item) == "table" then
+				if (uuid and item.UUID == uuid) or item.ItemId == itemId then
+					hasItem = true
+					break
+				end
+			elseif item == itemId then
+				hasItem = true
+				break
+			end
+		end
+
+		if hasItem and player.Character then
+			InventoryService.EquipItemModel(player.Character, itemId, uuid)
 		end
 	end
 end)

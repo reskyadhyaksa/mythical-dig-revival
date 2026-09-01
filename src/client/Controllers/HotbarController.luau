@@ -3,8 +3,8 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
-local Roact = require(ReplicatedStorage.Packages.Roact)
-local RoactRodux = require(ReplicatedStorage.Packages.RoactRodux)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local HotbarGui = require(script.Parent.Parent.Components.HotbarGui)
 local Store = require(script.Parent.Parent.Rodux.Store)
 
@@ -25,8 +25,6 @@ type ItemSlotData = {
 	FallbackEmoji: string?,
 }
 
-local itemSlots: { ItemSlotData } = {}
-
 local onToggleShovelCb: (() -> ())? = nil
 local onToggleInventoryCb: (() -> ())? = nil
 local onToggleShopCb: (() -> ())? = nil
@@ -41,24 +39,23 @@ end)
 local function UpdateUI()
 	if not currentHandle then return end
 
-	local app = Roact.createElement(RoactRodux.StoreProvider, {
-		store = Store,
-	}, {
-		Hotbar = Roact.createElement(HotbarGui, {
-			IsShovelEquipped = isShovelEquipped,
-			IsInventoryOpen = isInventoryOpen,
-			IsShopOpen = isShopOpen,
-			ActiveEquippedItem = activeEquippedItem,
-			ActiveEquippedUUID = activeEquippedUUID,
-			ItemSlots = itemSlots,
-			OnToggleShovel = onToggleShovelCb,
-			OnToggleInventory = onToggleInventoryCb,
-			OnToggleShop = onToggleShopCb,
-			OnEquipItem = onEquipItemCb,
-		}),
+	local state = Store:getState()
+	local currentInventory = (state and state.Inventory) or {}
+
+	local element = Roact.createElement(HotbarGui, {
+		IsShovelEquipped = isShovelEquipped,
+		IsInventoryOpen = isInventoryOpen,
+		IsShopOpen = isShopOpen,
+		ActiveEquippedItem = activeEquippedItem,
+		ActiveEquippedUUID = activeEquippedUUID,
+		ItemSlots = currentInventory,
+		OnToggleShovel = onToggleShovelCb,
+		OnToggleInventory = onToggleInventoryCb,
+		OnToggleShop = onToggleShopCb,
+		OnEquipItem = onEquipItemCb,
 	})
 
-	currentHandle = Roact.update(currentHandle, app)
+	currentHandle = Roact.update(currentHandle, element)
 end
 
 function HotbarController.MountHotbar(
@@ -74,28 +71,27 @@ function HotbarController.MountHotbar(
 	onToggleShopCb = onToggleShop
 	onEquipItemCb = onEquipItem
 
-	local app = Roact.createElement(RoactRodux.StoreProvider, {
-		store = Store,
-	}, {
-		Hotbar = Roact.createElement(HotbarGui, {
-			IsShovelEquipped = isShovelEquipped,
-			IsInventoryOpen = isInventoryOpen,
-			IsShopOpen = isShopOpen,
-			ActiveEquippedItem = activeEquippedItem,
-			ActiveEquippedUUID = activeEquippedUUID,
-			ItemSlots = itemSlots,
-			OnToggleShovel = onToggleShovel,
-			OnToggleInventory = onToggleInventory,
-			OnToggleShop = onToggleShop,
-			OnEquipItem = onEquipItem,
-		}),
+	local state = Store:getState()
+	local currentInventory = (state and state.Inventory) or {}
+
+	local element = Roact.createElement(HotbarGui, {
+		IsShovelEquipped = isShovelEquipped,
+		IsInventoryOpen = isInventoryOpen,
+		IsShopOpen = isShopOpen,
+		ActiveEquippedItem = activeEquippedItem,
+		ActiveEquippedUUID = activeEquippedUUID,
+		ItemSlots = currentInventory,
+		OnToggleShovel = onToggleShovel,
+		OnToggleInventory = onToggleInventory,
+		OnToggleShop = onToggleShop,
+		OnEquipItem = onEquipItem,
 	})
 
 	if currentHandle then
 		Roact.unmount(currentHandle)
 	end
 
-	currentHandle = Roact.mount(app, playerGui, "HotbarUI")
+	currentHandle = Roact.mount(element, playerGui, "HotbarUI")
 
 	if inputConnection then
 		inputConnection:Disconnect()
@@ -127,49 +123,18 @@ function HotbarController.MountHotbar(
 			if onToggleShopCb then onToggleShopCb() end
 		else
 			local itemIndex = slotIndex - 3
-			local itemData = itemSlots[itemIndex]
-			if itemData and itemData.ItemId ~= "" and onEquipItemCb then
-				onEquipItemCb(itemData.UUID or "", itemData.ItemId)
+			local state = Store:getState()
+			local currentInventory = (state and state.Inventory) or {}
+			local itemData = currentInventory[itemIndex]
+			if itemData and onEquipItemCb then
+				local itemId = if typeof(itemData) == "table" then (itemData.ItemId or "") else tostring(itemData)
+				local uuid = if typeof(itemData) == "table" then (itemData.UUID or "") else ""
+				if itemId ~= "" then
+					onEquipItemCb(uuid, itemId)
+				end
 			end
 		end
 	end)
-end
-
-function HotbarController.SetInventory(inventory: any)
-	local slots: { ItemSlotData } = {}
-
-	if typeof(inventory) == "table" then
-		if #inventory > 0 then
-			for index, item in ipairs(inventory) do
-				if index <= 4 then
-					local itemId = if typeof(item) == "table" then item.ItemId else item
-					local uuid = if typeof(item) == "table" then item.UUID else ""
-					table.insert(slots, {
-						UUID = uuid,
-						ItemId = itemId,
-						Count = 1,
-						FallbackEmoji = "💎",
-					})
-				end
-			end
-		else
-			local index = 1
-			for itemId, count in pairs(inventory) do
-				if count > 0 and index <= 4 then
-					table.insert(slots, {
-						UUID = "",
-						ItemId = itemId,
-						Count = count,
-						FallbackEmoji = "💎",
-					})
-					index += 1
-				end
-			end
-		end
-	end
-
-	itemSlots = slots
-	UpdateUI()
 end
 
 function HotbarController.SetState(
@@ -194,12 +159,20 @@ function HotbarController.SetState(
 	end
 	if equippedItem ~= nil then
 		activeEquippedItem = equippedItem
-		activeEquippedUUID = equippedUUID or ""
+		if equippedUUID ~= nil then
+			activeEquippedUUID = equippedUUID
+		elseif equippedItem == "" then
+			activeEquippedUUID = ""
+		end
 		if equippedItem ~= "" then
 			isShovelEquipped = false
 		end
 	end
 
+	UpdateUI()
+end
+
+function HotbarController.SetInventory(newInventory: any)
 	UpdateUI()
 end
 

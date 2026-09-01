@@ -1,8 +1,8 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Roact = require(ReplicatedStorage.Packages.Roact)
-local RoactRodux = require(ReplicatedStorage.Packages.RoactRodux)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local InventoryGui = require(script.Parent.Parent.Components.InventoryGui)
 local Store = require(script.Parent.Parent.Rodux.Store)
 
@@ -14,30 +14,27 @@ function InventoryController.MountInventory(
 	onSellAllCallback: (() -> ())?,
 	onCloseCallback: (() -> ())?
 )
-	onSellAllCallback: (() -> ())?,
-	onCloseCallback: (() -> ())?
-)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local state = Store:getState()
 
-	local app = Roact.createElement(RoactRodux.StoreProvider, {
-		store = Store,
-	}, {
-		Inventory = Roact.createElement(InventoryGui, {
-			OnClose = function()
-				InventoryController.UnmountInventory()
-				if onCloseCallback then
-					onCloseCallback()
-				end
-			end,
-			OnSellItem = onSellItemCallback,
-			OnSellAll = onSellAllCallback,
-		}),
+	local element = Roact.createElement(InventoryGui, {
+		Inventory = (state and state.Inventory) or {},
+		Level = (state and state.Level) or 0,
+		Coins = (state and state.Coins) or 0,
+		OnClose = function()
+			InventoryController.UnmountInventory()
+			if onCloseCallback then
+				onCloseCallback()
+			end
+		end,
+		OnSellItem = onSellItemCallback,
+		OnSellAll = onSellAllCallback,
 	})
 
 	if currentHandle then
-		currentHandle = Roact.update(currentHandle, app)
+		currentHandle = Roact.update(currentHandle, element)
 	else
-		currentHandle = Roact.mount(app, playerGui, "InventoryGuiUI")
+		currentHandle = Roact.mount(element, playerGui, "InventoryGuiUI")
 	end
 end
 

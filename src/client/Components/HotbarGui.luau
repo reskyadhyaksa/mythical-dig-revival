@@ -1,8 +1,7 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
-local RoactRodux = require(Packages.RoactRodux)
+local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(Packages:WaitForChild("Roact"))
 local HotbarSlot = require(script.Parent.Common.HotbarSlot)
 
 local HotbarGui = Roact.Component:extend("HotbarGui")
@@ -35,8 +34,20 @@ function HotbarGui:render()
 	-- Filter item slots valid (maksimal 4 item untuk slot 4 hingga 7)
 	local validItemSlots: { ItemSlotData } = {}
 	for _, itemData in ipairs(itemSlots) do
-		if itemData.ItemId ~= "" and itemData.Count > 0 and #validItemSlots < 4 then
-			table.insert(validItemSlots, itemData)
+		local itemId = if typeof(itemData) == "table" then (itemData.ItemId or "") else tostring(itemData)
+		local uuid = if typeof(itemData) == "table" then (itemData.UUID or "") else ""
+		local count = if typeof(itemData) == "table" and itemData.Count then itemData.Count else 1
+		local image = if typeof(itemData) == "table" and itemData.Image then itemData.Image else ""
+		local fallbackEmoji = if typeof(itemData) == "table" and itemData.FallbackEmoji then itemData.FallbackEmoji else "💎"
+
+		if itemId ~= "" and count > 0 and #validItemSlots < 4 then
+			table.insert(validItemSlots, {
+				UUID = uuid,
+				ItemId = itemId,
+				Count = count,
+				Image = image,
+				FallbackEmoji = fallbackEmoji,
+			})
 		end
 	end
 
@@ -97,8 +108,13 @@ function HotbarGui:render()
 		local image = itemData.Image or ""
 		local fallbackEmoji = itemData.FallbackEmoji or "💎"
 
-		-- Cek aktif berdasarkan UUID spesifik agar item lain dengan nama yang sama tidak ikut menyala!
-		local isActive = if uuid ~= "" then (activeEquippedUUID == uuid) else (activeEquippedItem == itemId)
+		-- Cek aktif secara presisi berdasarkan UUID unik item!
+		local isActive = false
+		if activeEquippedUUID ~= "" and uuid ~= "" then
+			isActive = (activeEquippedUUID == uuid)
+		elseif activeEquippedUUID == "" and activeEquippedItem ~= "" then
+			isActive = (activeEquippedItem == itemId and i == 1)
+		end
 
 		slotChildren["ItemSlot_" .. slotKey] = Roact.createElement(HotbarSlot, {
 			LayoutOrder = i + 3,
@@ -134,8 +150,4 @@ function HotbarGui:render()
 	})
 end
 
-return RoactRodux.connect(function(state, props)
-	return {
-		ItemSlots = state.Inventory, -- Use inventory as item slots
-	}
-end)(HotbarGui)
+return HotbarGui

@@ -2,7 +2,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage.Packages
 local Roact = require(Packages.Roact)
-local RoactRodux = require(Packages.RoactRodux)
 local StatBar = require(script.Parent.Common.StatBar)
 
 local StatsHudGui = Roact.Component:extend("StatsHudGui")
@@ -69,9 +68,4 @@ function StatsHudGui:render()
 	})
 end
 
-return RoactRodux.connect(function(state, props)
-	return {
-		Coins = state.Coins,
-		Luck = state.Luck,
-	}
-end)(StatsHudGui)
+return StatsHudGui

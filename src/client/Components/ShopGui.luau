@@ -1,8 +1,7 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
-local RoactRodux = require(Packages.RoactRodux)
+local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(Packages:WaitForChild("Roact"))
 local Shovels = require(ReplicatedStorage.Shared.Data.Shovels) :: any
 
 local ShopGui = Roact.Component:extend("ShopGui")
@@ -225,10 +224,4 @@ function ObjectAssign(target, source)
 	return target
 end
 
-return RoactRodux.connect(function(state, props)
-	return {
-		Coins = state.Coins,
-		EquippedShovel = state.EquippedShovel,
-		OwnedShovels = state.OwnedShovels,
-	}
-end)(ShopGui)
+return ShopGui

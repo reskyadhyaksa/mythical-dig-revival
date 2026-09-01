@@ -1,8 +1,8 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Roact = require(ReplicatedStorage.Packages.Roact)
-local RoactRodux = require(ReplicatedStorage.Packages.RoactRodux)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local ShopGui = require(script.Parent.Parent.Components.ShopGui)
 local Store = require(script.Parent.Parent.Rodux.Store)
 
@@ -15,26 +15,26 @@ function ShopController.MountShop(
 	onCloseCallback: (() -> ())?
 )
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local state = Store:getState()
 
-	local app = Roact.createElement(RoactRodux.StoreProvider, {
-		store = Store,
-	}, {
-		Shop = Roact.createElement(ShopGui, {
-			OnClose = function()
-				ShopController.UnmountShop()
-				if onCloseCallback then
-					onCloseCallback()
-				end
-			end,
-			OnBuy = onBuyCallback,
-			OnEquip = onEquipCallback,
-		}),
+	local element = Roact.createElement(ShopGui, {
+		Coins = (state and state.Coins) or 0,
+		EquippedShovel = (state and state.EquippedShovel) or "WoodenShovel",
+		OwnedShovels = (state and state.OwnedShovels) or { "WoodenShovel" },
+		OnClose = function()
+			ShopController.UnmountShop()
+			if onCloseCallback then
+				onCloseCallback()
+			end
+		end,
+		OnBuy = onBuyCallback,
+		OnEquip = onEquipCallback,
 	})
 
 	if currentHandle then
-		currentHandle = Roact.update(currentHandle, app)
+		currentHandle = Roact.update(currentHandle, element)
 	else
-		currentHandle = Roact.mount(app, playerGui, "ShopGuiUI")
+		currentHandle = Roact.mount(element, playerGui, "ShopGuiUI")
 	end
 end
 

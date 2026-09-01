@@ -1,27 +1,27 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Roact = require(ReplicatedStorage.Packages.Roact)
-local RoactRodux = require(ReplicatedStorage.Packages.RoactRodux)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local StatsHudGui = require(script.Parent.Parent.Components.StatsHudGui)
 local Store = require(script.Parent.Parent.Rodux.Store)
 
 local StatsHudController = {}
 local currentHandle: any = nil
 
-function StatsHudController.MountStatsHud()
+function StatsHudController.MountStatsHud(coins: number?, luck: (number | string)?)
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local state = Store:getState()
 
-	local app = Roact.createElement(RoactRodux.StoreProvider, {
-		store = Store,
-	}, {
-		StatsHud = Roact.createElement(StatsHudGui),
+	local element = Roact.createElement(StatsHudGui, {
+		Coins = coins or (state and state.Coins) or 0,
+		Luck = luck or (state and state.Luck) or "+100%",
 	})
 
 	if currentHandle then
-		Roact.update(currentHandle, app)
+		Roact.update(currentHandle, element)
 	else
-		currentHandle = Roact.mount(app, playerGui, "StatsHudUI")
+		currentHandle = Roact.mount(element, playerGui, "StatsHudUI")
 	end
 end
 

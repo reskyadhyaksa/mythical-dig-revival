@@ -39,6 +39,7 @@ end
 
 local isInventoryOpen = false
 local isShopOpen = false
+local isDigMinigameActive = false
 
 local function SyncPlayerData(data: any)
 	if not data then return end
@@ -50,6 +51,7 @@ local function StartDigMinigameUI(digData: any)
 	if not digData then return end
 
 	CleanupActiveDigConnection()
+	isDigMinigameActive = true
 
 	local currentHp = digData.CurrentHp
 	local maxHp = digData.MaxHp
@@ -64,6 +66,8 @@ local function StartDigMinigameUI(digData: any)
 		CleanupActiveDigConnection()
 		cancelDigRE:FireServer()
 		DigController.UnmountMinigame()
+		task.wait(0.15)
+		isDigMinigameActive = false
 	end
 
 	local function OnSwingClicked()
@@ -92,11 +96,14 @@ local function StartDigMinigameUI(digData: any)
 				task.wait(0.5)
 
 				DigController.UnmountMinigame()
-				task.wait(0.1)
+				task.wait(0.2) -- Delay pendingin setelah UI minigame hilang sepenuhnya
+
 				local newData = getPlayerDataRF:InvokeServer()
 				if newData then
 					SyncPlayerData(newData)
 				end
+
+				isDigMinigameActive = false
 			else
 				DigController.MountMinigame(
 					rarity,
@@ -114,6 +121,8 @@ local function StartDigMinigameUI(digData: any)
 		else
 			CleanupActiveDigConnection()
 			DigController.UnmountMinigame()
+			task.wait(0.15)
+			isDigMinigameActive = false
 		end
 	end
 
@@ -141,9 +150,7 @@ end
 local OnSellItemAction: ((uuidOrItemId: string, amount: number) -> ())? = nil
 local OnSellAllAction: (() -> ())? = nil
 
-local function MountOrUpdateInventoryUI(data: any)
-	if not data then return end
-	SyncPlayerData(data)
+local function MountOrUpdateInventoryUI()
 	InventoryController.MountInventory(
 		OnSellItemAction,
 		OnSellAllAction,
@@ -154,54 +161,14 @@ local function MountOrUpdateInventoryUI(data: any)
 	)
 end
 
-OnSellItemAction = function(uuidOrItemId: string, amount: number)
-	sellItemRE:FireServer(uuidOrItemId, amount)
-	task.wait(0.1)
-	local updatedData = getPlayerDataRF:InvokeServer()
-	if updatedData then
-		MountOrUpdateInventoryUI(updatedData)
-	end
-end
-
-OnSellAllAction = function()
-	sellAllRE:FireServer()
-	task.wait(0.1)
-	local updatedData = getPlayerDataRF:InvokeServer()
-	if updatedData then
-		MountOrUpdateInventoryUI(updatedData)
-	end
-end
-
-local function ToggleInventory()
-	if isInventoryOpen then
-		InventoryController.UnmountInventory()
-		isInventoryOpen = false
-		HotbarController.SetState(nil, false, false)
-	else
-		local data = getPlayerDataRF:InvokeServer()
-		if data then
-			if isShopOpen then
-				ShopController.UnmountShop()
-				isShopOpen = false
-			end
-
-			MountOrUpdateInventoryUI(data)
-			isInventoryOpen = true
-			HotbarController.SetState(nil, true, false)
-		end
-	end
-end
-
-local function MountOrUpdateShopUI(data: any)
-	if not data then return end
-	SyncPlayerData(data)
+local function MountOrUpdateShopUI()
 	ShopController.MountShop(
 		function(shovelId)
 			buyShovelRE:FireServer(shovelId)
 			task.wait(0.1)
 			local updatedData = getPlayerDataRF:InvokeServer()
 			if updatedData then
-				MountOrUpdateShopUI(updatedData)
+				SyncPlayerData(updatedData)
 			end
 		end,
 		function(shovelId)
@@ -209,7 +176,7 @@ local function MountOrUpdateShopUI(data: any)
 			task.wait(0.1)
 			local updatedData = getPlayerDataRF:InvokeServer()
 			if updatedData then
-				MountOrUpdateShopUI(updatedData)
+				SyncPlayerData(updatedData)
 			end
 		end,
 		function()
@@ -219,7 +186,63 @@ local function MountOrUpdateShopUI(data: any)
 	)
 end
 
+-- Store.changed: Otomatis memicu update reaktif pada StatsHud, Hotbar, Inventory, dan Shop
+Store.changed:connect(function(newState)
+	StatsHudController.MountStatsHud(newState.Coins, newState.Luck)
+	HotbarController.SetInventory(newState.Inventory)
+
+	if isInventoryOpen then
+		MountOrUpdateInventoryUI()
+	end
+	if isShopOpen then
+		MountOrUpdateShopUI()
+	end
+end)
+
+OnSellItemAction = function(uuidOrItemId: string, amount: number)
+	sellItemRE:FireServer(uuidOrItemId, amount)
+	task.wait(0.1)
+	local updatedData = getPlayerDataRF:InvokeServer()
+	if updatedData then
+		SyncPlayerData(updatedData)
+	end
+end
+
+OnSellAllAction = function()
+	sellAllRE:FireServer()
+	task.wait(0.1)
+	local updatedData = getPlayerDataRF:InvokeServer()
+	if updatedData then
+		SyncPlayerData(updatedData)
+	end
+end
+
+local function ToggleInventory()
+	if isDigMinigameActive then return end
+
+	if isInventoryOpen then
+		InventoryController.UnmountInventory()
+		isInventoryOpen = false
+		HotbarController.SetState(nil, false, false)
+	else
+		local data = getPlayerDataRF:InvokeServer()
+		if data then
+			SyncPlayerData(data)
+			if isShopOpen then
+				ShopController.UnmountShop()
+				isShopOpen = false
+			end
+
+			MountOrUpdateInventoryUI()
+			isInventoryOpen = true
+			HotbarController.SetState(nil, true, false)
+		end
+	end
+end
+
 local function ToggleShop()
+	if isDigMinigameActive then return end
+
 	if isShopOpen then
 		ShopController.UnmountShop()
 		isShopOpen = false
@@ -227,12 +250,13 @@ local function ToggleShop()
 	else
 		local data = getPlayerDataRF:InvokeServer()
 		if data then
+			SyncPlayerData(data)
 			if isInventoryOpen then
 				InventoryController.UnmountInventory()
 				isInventoryOpen = false
 			end
 
-			MountOrUpdateShopUI(data)
+			MountOrUpdateShopUI()
 			isShopOpen = true
 			HotbarController.SetState(nil, false, true)
 		end
@@ -240,30 +264,63 @@ local function ToggleShop()
 end
 
 local function ToggleShovel()
+	if isDigMinigameActive then return end
+
 	local char = LocalPlayer.Character
 	if not char then return end
 
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	local equippedTool = char:FindFirstChildOfClass("Tool")
 
-	if equippedTool and humanoid then
+	-- Cek apakah karakter sedang memegang sekop
+	local isHoldingShovel = equippedTool and (equippedTool.Name:find("Shovel") ~= nil or equippedTool.Name:find("Sekop") ~= nil)
+
+	if isHoldingShovel and humanoid then
+		-- Jika sedang memegang sekop, unequip sekop
 		humanoid:UnequipTools()
-		HotbarController.SetState(false, nil, nil)
+		HotbarController.SetState(false, nil, nil, "", "")
 	else
+		-- Jika sedang memegang item non-sekop, unequip dulu
+		if equippedTool and humanoid then
+			humanoid:UnequipTools()
+		end
+
+		-- Bersihkan tool item visual non-sekop dari backpack agar tidak terpilih
 		local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-		local tool = backpack and backpack:FindFirstChildOfClass("Tool")
-		if tool and humanoid then
-			humanoid:EquipTool(tool)
-			HotbarController.SetState(true, nil, nil)
+		if backpack then
+			for _, tool in backpack:GetChildren() do
+				if not tool.Name:find("Shovel") and not tool.Name:find("Sekop") then
+					tool:Destroy()
+				end
+			end
+		end
+
+		-- Cari sekop di dalam backpack
+		local shovelTool: Tool? = nil
+		if backpack then
+			for _, child in backpack:GetChildren() do
+				if child:IsA("Tool") and (child.Name:find("Shovel") or child.Name:find("Sekop")) then
+					shovelTool = child
+					break
+				end
+			end
+		end
+
+		if shovelTool and humanoid then
+			humanoid:EquipTool(shovelTool)
+			HotbarController.SetState(true, nil, nil, "", "")
 		else
-			local data = getPlayerDataRF:InvokeServer()
-			if data and data.EquippedShovel then
-				equipShovelRE:FireServer(data.EquippedShovel)
-				task.wait(0.15)
-				local newTool = backpack and backpack:FindFirstChildOfClass("Tool")
-				if newTool and humanoid then
-					humanoid:EquipTool(newTool)
-					HotbarController.SetState(true, nil, nil)
+			local state = Store:getState()
+			local shovelId = (state and state.EquippedShovel) or "WoodenShovel"
+			equipShovelRE:FireServer(shovelId)
+			task.wait(0.15)
+			if backpack and humanoid then
+				for _, child in backpack:GetChildren() do
+					if child:IsA("Tool") and (child.Name:find("Shovel") or child.Name:find("Sekop")) then
+						humanoid:EquipTool(child)
+						HotbarController.SetState(true, nil, nil, "", "")
+						break
+					end
 				end
 			end
 		end
@@ -271,17 +328,29 @@ local function ToggleShovel()
 end
 
 local function OnEquipItem(uuid: string, itemId: string)
+	if isDigMinigameActive then return end
+
 	local char = LocalPlayer.Character
 	if not char then return end
 
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
 	local equippedTool = char:FindFirstChildOfClass("Tool")
+	local currentToolUuid = equippedTool and equippedTool:GetAttribute("UUID")
 
-	if equippedTool and (equippedTool.Name == itemId or equippedTool.Name == uuid) and humanoid then
+	-- Jika item yang sama diklik kembali, unequip item tersebut dan bersihkan dari backpack
+	if equippedTool and ((uuid ~= "" and currentToolUuid == uuid) or (uuid == "" and equippedTool.Name == itemId)) and humanoid then
 		humanoid:UnequipTools()
+		local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+		if backpack then
+			for _, tool in backpack:GetChildren() do
+				if not tool.Name:find("Shovel") and not tool.Name:find("Sekop") then
+					tool:Destroy()
+				end
+			end
+		end
 		HotbarController.SetState(false, nil, nil, "", "")
 	else
-		equipItemRE:FireServer(itemId)
+		equipItemRE:FireServer(itemId, uuid)
 		HotbarController.SetState(false, nil, nil, itemId, uuid)
 	end
 end
@@ -291,24 +360,26 @@ local function SetupToolTracker(char: Model)
 	char.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
 			if child.Name:find("Shovel") or child.Name:find("Sekop") then
-				HotbarController.SetState(true, nil, nil, "")
+				HotbarController.SetState(true, nil, nil, "", "")
 			else
-				HotbarController.SetState(false, nil, nil, child.Name)
+				local toolUuid = child:GetAttribute("UUID") or ""
+				HotbarController.SetState(false, nil, nil, child.Name, toolUuid)
 			end
 		end
 	end)
 	char.ChildRemoved:Connect(function(child)
 		if child:IsA("Tool") then
-			HotbarController.SetState(false, nil, nil, "")
+			HotbarController.SetState(false, nil, nil, "", "")
 		end
 	end)
 
 	local currentTool = char:FindFirstChildOfClass("Tool")
 	if currentTool then
 		if currentTool.Name:find("Shovel") or currentTool.Name:find("Sekop") then
-			HotbarController.SetState(true, nil, nil, "")
+			HotbarController.SetState(true, nil, nil, "", "")
 		else
-			HotbarController.SetState(false, nil, nil, currentTool.Name)
+			local toolUuid = currentTool:GetAttribute("UUID") or ""
+			HotbarController.SetState(false, nil, nil, currentTool.Name, toolUuid)
 		end
 	end
 end
@@ -330,6 +401,12 @@ local function SetupHUD()
 		OnEquipItem
 	)
 
+	-- Mount Right Sidebar Menu (Inventory & Shop)
+	RightMenuController.MountRightMenu(
+		ToggleInventory,
+		ToggleShop
+	)
+
 	-- Ambil data aktual dari server DataStore secara asinkron
 	task.spawn(function()
 		local initialData = getPlayerDataRF:InvokeServer()
@@ -348,11 +425,20 @@ end)
 
 -- 2. Memulai Penggalian saat player mengayun sekop
 local function ConnectToolDigging(character: Model)
+	local function OnToolActivated(tool: Tool)
+		if isDigMinigameActive then return end
+		if not tool.Name:find("Shovel") and not tool.Name:find("Sekop") then return end
+
+		local digData = startDigRF:InvokeServer()
+		if digData then
+			StartDigMinigameUI(digData)
+		end
+	end
+
 	character.ChildAdded:Connect(function(child)
 		if child:IsA("Tool") then
 			child.Activated:Connect(function()
-				local digData = startDigRF:InvokeServer()
-				StartDigMinigameUI(digData)
+				OnToolActivated(child)
 			end)
 		end
 	end)
@@ -360,8 +446,7 @@ local function ConnectToolDigging(character: Model)
 	local currentTool = character:FindFirstChildOfClass("Tool")
 	if currentTool then
 		currentTool.Activated:Connect(function()
-			local digData = startDigRF:InvokeServer()
-			StartDigMinigameUI(digData)
+			OnToolActivated(currentTool)
 		end)
 	end
 end

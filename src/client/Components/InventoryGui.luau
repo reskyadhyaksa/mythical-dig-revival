@@ -1,8 +1,7 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
-local RoactRodux = require(Packages.RoactRodux)
+local Packages = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(Packages:WaitForChild("Roact"))
 local Items = require(ReplicatedStorage.Shared.Data.Items) :: any
 local LevelConfig = require(ReplicatedStorage.Shared.Data.LevelConfig) :: any
 
@@ -17,6 +16,12 @@ local RarityColors = {
 	Secret = Color3.fromRGB(231, 76, 60),
 }
 
+function InventoryGui:init()
+	self.state = {
+		visibleLimit = 36, -- Render 36 item pertama saat GUI dibuka
+	}
+end
+
 function InventoryGui:render()
 	local inventory = self.props.Inventory or {}
 	local level = self.props.Level or 0
@@ -25,6 +30,7 @@ function InventoryGui:render()
 	local onSellItem = self.props.OnSellItem
 	local onSellAll = self.props.OnSellAll
 
+	local visibleLimit = self.state.visibleLimit or 36
 	local maxCapacity = LevelConfig.GetMaxInventoryCapacity(level)
 	local maxWeight = LevelConfig.GetMaxWeightCapacity(level)
 	local totalItems = 0
@@ -42,61 +48,64 @@ function InventoryGui:render()
 		totalValue += unitPrice
 		totalWeight += weight
 
-		local itemDef = Items.Dict[itemId] or { Name = itemId, Rarity = "Common" }
-		local rarityColor = RarityColors[itemDef.Rarity] or RarityColors.Common
-		local cardKey = uuid or string.format("%s_%d", itemId, index)
+		-- Batch Lazy Load: Hanya buat elemen UI untuk item dalam batas visibleLimit
+		if index <= visibleLimit then
+			local itemDef = Items.Dict[itemId] or { Name = itemId, Rarity = "Common" }
+			local rarityColor = RarityColors[itemDef.Rarity] or RarityColors.Common
+			local cardKey = uuid or string.format("%s_%d", itemId, index)
 
-		itemCards[cardKey] = Roact.createElement("Frame", {
-			BackgroundColor3 = Color3.fromRGB(28, 33, 46),
-			BorderSizePixel = 0,
-		}, {
-			UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
-			UIStroke = Roact.createElement("UIStroke", {
-				Color = rarityColor,
-				Thickness = 1.5,
-			}),
-
-			-- Item Name
-			NameLabel = Roact.createElement("TextLabel", {
-				Position = UDim2.fromOffset(10, 10),
-				Size = UDim2.new(1, -20, 0, 25),
-				BackgroundTransparency = 1,
-				Text = itemDef.Name,
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 14,
-				Font = Enum.Font.GothamBold,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-
-			-- Rarity Tag, Unit Price & Unit Weight
-			DetailsLabel = Roact.createElement("TextLabel", {
-				Position = UDim2.fromOffset(10, 36),
-				Size = UDim2.new(1, -20, 0, 20),
-				BackgroundTransparency = 1,
-				Text = string.format("%s • 💰 %d • ⚖️ %.1fkg", string.upper(itemDef.Rarity), unitPrice, weight),
-				TextColor3 = rarityColor,
-				TextSize = 10,
-				Font = Enum.Font.GothamMedium,
-				TextXAlignment = Enum.TextXAlignment.Left,
-			}),
-
-			-- Sell Button per Unique Item
-			SellButton = Roact.createElement("TextButton", {
-				Position = UDim2.fromOffset(10, 68),
-				Size = UDim2.new(1, -20, 0, 30),
-				BackgroundColor3 = Color3.fromRGB(46, 204, 113),
-				Text = string.format("SELL (💰 %d)", unitPrice),
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextSize = 12,
-				Font = Enum.Font.GothamBold,
-
-				[Roact.Event.Activated] = function()
-					if onSellItem then onSellItem(uuid or itemId, 1) end
-				end,
+			itemCards[cardKey] = Roact.createElement("Frame", {
+				BackgroundColor3 = Color3.fromRGB(28, 33, 46),
+				BorderSizePixel = 0,
 			}, {
-				UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
-			}),
-		})
+				UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 12) }),
+				UIStroke = Roact.createElement("UIStroke", {
+					Color = rarityColor,
+					Thickness = 1.5,
+				}),
+
+				-- Item Name
+				NameLabel = Roact.createElement("TextLabel", {
+					Position = UDim2.fromOffset(10, 10),
+					Size = UDim2.new(1, -20, 0, 25),
+					BackgroundTransparency = 1,
+					Text = itemDef.Name,
+					TextColor3 = Color3.fromRGB(255, 255, 255),
+					TextSize = 14,
+					Font = Enum.Font.GothamBold,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				}),
+
+				-- Rarity Tag, Unit Price & Unit Weight
+				DetailsLabel = Roact.createElement("TextLabel", {
+					Position = UDim2.fromOffset(10, 36),
+					Size = UDim2.new(1, -20, 0, 20),
+					BackgroundTransparency = 1,
+					Text = string.format("%s • 💰 %d • ⚖️ %.1fkg", string.upper(itemDef.Rarity), unitPrice, weight),
+					TextColor3 = rarityColor,
+					TextSize = 10,
+					Font = Enum.Font.GothamMedium,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				}),
+
+				-- Sell Button per Unique Item
+				SellButton = Roact.createElement("TextButton", {
+					Position = UDim2.fromOffset(10, 68),
+					Size = UDim2.new(1, -20, 0, 30),
+					BackgroundColor3 = Color3.fromRGB(46, 204, 113),
+					Text = string.format("SELL (💰 %d)", unitPrice),
+					TextColor3 = Color3.fromRGB(255, 255, 255),
+					TextSize = 12,
+					Font = Enum.Font.GothamBold,
+
+					[Roact.Event.Activated] = function()
+						if onSellItem then onSellItem(uuid or itemId, 1) end
+					end,
+				}, {
+					UICorner = Roact.createElement("UICorner", { CornerRadius = UDim.new(0, 6) }),
+				}),
+			})
+		end
 	end
 
 	local isFull = totalItems >= maxCapacity
@@ -226,7 +235,7 @@ function InventoryGui:render()
 				}),
 			}),
 
-			-- Item Grid Container
+			-- Item Grid Container with Infinite Scroll / Lazy Loading
 			ScrollContainer = Roact.createElement("ScrollingFrame", {
 				Position = UDim2.fromOffset(15, 120),
 				Size = UDim2.new(1, -30, 1, -135),
@@ -236,6 +245,28 @@ function InventoryGui:render()
 				ScrollBarImageColor3 = Color3.fromRGB(52, 152, 219),
 				CanvasSize = UDim2.fromScale(0, 0),
 				AutomaticCanvasSize = Enum.AutomaticSize.Y,
+
+				-- Batch Lazy Load saat scroll mendekati bawah (75% scroll limit)
+				[Roact.Change.CanvasPosition] = function(rbx: ScrollingFrame)
+					local totalCount = #inventory
+					local currentLimit = self.state.visibleLimit or 36
+					if currentLimit >= totalCount then
+						return
+					end
+
+					local canvasHeight = rbx.AbsoluteCanvasSize.Y
+					local windowHeight = rbx.AbsoluteWindowSize.Y
+					local maxScroll = math.max(1, canvasHeight - windowHeight)
+					local currentScroll = rbx.CanvasPosition.Y
+
+					if currentScroll >= maxScroll * 0.75 then
+						self:setState(function(prevState)
+							return {
+								visibleLimit = math.min(totalCount, (prevState.visibleLimit or 36) + 24),
+							}
+						end)
+					end
+				end,
 			}, ObjectAssign({
 				UIGridLayout = Roact.createElement("UIGridLayout", {
 					CellSize = UDim2.fromOffset(160, 110),
@@ -254,10 +285,4 @@ function ObjectAssign(target, source)
 	return target
 end
 
-return RoactRodux.connect(function(state, props)
-	return {
-		Inventory = state.Inventory,
-		Coins = state.Coins,
-		Level = state.Level,
-	}
-end)(InventoryGui)
+return InventoryGui
