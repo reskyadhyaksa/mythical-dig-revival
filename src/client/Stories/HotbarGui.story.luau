@@ -26,6 +26,9 @@ return function(target: Instance)
 		OnEquipItem = function(itemId)
 			print("Storybook: Equip Item Clicked:", itemId)
 		end,
+		OnToggleAuto = function()
+			print("Storybook: Auto Toggled")
+		end,
 	}), target)
 
 	return function()

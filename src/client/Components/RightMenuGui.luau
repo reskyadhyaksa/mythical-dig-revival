@@ -1,7 +1,7 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local MenuButton = require(script.Parent.Common.MenuButton)
 
 local RightMenuGui = Roact.Component:extend("RightMenuGui")

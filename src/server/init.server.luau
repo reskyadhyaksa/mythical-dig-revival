@@ -55,11 +55,21 @@ equipItemRE.OnServerEvent:Connect(function(player: Player, itemId: string, uuid:
 	local profile = DataService.GetProfile(player)
 	if profile and profile.Data and profile.Data.Inventory then
 		local hasItem = false
+		local itemWeight: number? = nil
 		for _, item in ipairs(profile.Data.Inventory) do
 			if typeof(item) == "table" then
-				if (uuid and item.UUID == uuid) or item.ItemId == itemId then
-					hasItem = true
-					break
+				if uuid and uuid ~= "" then
+					if item.UUID == uuid then
+						hasItem = true
+						itemWeight = item.Weight
+						break
+					end
+				else
+					if item.ItemId == itemId then
+						hasItem = true
+						itemWeight = item.Weight
+						break
+					end
 				end
 			elseif item == itemId then
 				hasItem = true
@@ -68,7 +78,7 @@ equipItemRE.OnServerEvent:Connect(function(player: Player, itemId: string, uuid:
 		end
 
 		if hasItem and player.Character then
-			InventoryService.EquipItemModel(player.Character, itemId, uuid)
+			InventoryService.EquipItemModel(player.Character, itemId, uuid, itemWeight)
 		end
 	end
 end)
@@ -85,17 +95,19 @@ getPlayerDataRF.OnServerInvoke = function(player: Player)
 	end
 
 	if profile and profile.Data then
+		local lvl = profile.Data.Level or 0
+		profile.Data.Luck = LevelConfig.GetLuckString(lvl)
 		return profile.Data
 	end
 	return nil
 end
 
--- Mulai galian
-startDigRF.OnServerInvoke = function(player: Player)
+-- Mulai galian dengan dukungan Luck Boost Multiplier
+startDigRF.OnServerInvoke = function(player: Player, luckMultiplier: number?)
 	local profile = DataService.GetProfile(player)
 	if not profile then return nil end
 
-	local activeDig = DigService.StartDigNode(player, profile)
+	local activeDig = DigService.StartDigNode(player, profile, luckMultiplier)
 	if activeDig and activeDig.TargetItem then
 		return {
 			Rarity = activeDig.TargetItem.Rarity,
@@ -168,6 +180,7 @@ buyShovelRE.OnServerEvent:Connect(function(player: Player, shovelId: string)
 		profile.Data.Coins = currentCoins - price
 		table.insert(profile.Data.OwnedShovels, shovelId)
 		InventoryService.EquipShovel(player, profile, shovelId)
+		playerDataLoadedRE:FireClient(player, profile.Data)
 		print(string.format("🛒 Player %s bought %s for %d Coins!", player.Name, shovelDef.Name, price))
 	end
 end)
@@ -175,8 +188,12 @@ end)
 -- Pasang Sekop
 equipShovelRE.OnServerEvent:Connect(function(player: Player, shovelId: string)
 	local profile = DataService.GetProfile(player)
-	if profile then
-		InventoryService.EquipShovel(player, profile, shovelId)
+	if profile and profile.Data then
+		local success = InventoryService.EquipShovel(player, profile, shovelId)
+		if success then
+			playerDataLoadedRE:FireClient(player, profile.Data)
+			print(string.format("⚒️ Player %s equipped %s!", player.Name, shovelId))
+		end
 	end
 end)
 

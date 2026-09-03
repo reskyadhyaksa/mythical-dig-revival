@@ -1,11 +1,20 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local DeviceHelper = require(ReplicatedStorage.Shared.Common.DeviceHelper)
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local DigMinigameHelper = require(script.Parent.Common.DigMinigameHelper)
 
+local ASSETS = {
+	OuterContainer = "rbxassetid://77990043906183",
+	InnerProgressBar = "rbxassetid://105807504905048",
+	Countdown = "rbxassetid://126607445864603",
+	TimerIcon = "rbxassetid://109376754540674",
+	Shovel = "rbxassetid://83791111239909",
+}
+
 local DigMinigame = Roact.Component:extend("DigMinigame")
+local deviceType = DeviceHelper.GetDeviceType()
 
 function DigMinigame:init()
 	self.startTime = os.clock()
@@ -13,7 +22,7 @@ function DigMinigame:init()
 		timeRemaining = self.props.TimeLimit or 15,
 	}
 
-	-- Roact Refs untuk kontrol TweenService & UIGradient
+	-- Roact Refs untuk kontrol animasi UI
 	self.clipFrameRef = Roact.createRef()
 	self.shovelRef = Roact.createRef()
 	self.timerIconRef = Roact.createRef()
@@ -25,114 +34,30 @@ function DigMinigame:didMount()
 	self.running = true
 
 	-- 1. Countdown Timer Loop
-	task.spawn(function()
-		while self.running do
-			task.wait(0.2)
-			if not self.running then
-				break
-			end
+	DigMinigameHelper.StartCountdown(
+		function()
+			return self.running
+		end,
+		self.startTime,
+		self.props.TimeLimit or 15,
+		function(remaining)
+			self:setState({ timeRemaining = remaining })
+		end,
+		self.props.OnCancel
+	)
 
-			local elapsed = os.clock() - self.startTime
-			local timeLimit = self.props.TimeLimit or 15
-			local remaining = math.max(0, math.ceil(timeLimit - elapsed))
-
-			self:setState({
-				timeRemaining = remaining,
-			})
-
-			if remaining <= 0 then
-				if self.props.OnCancel then
-					self.props.OnCancel()
-				end
-				break
-			end
-		end
-	end)
-
-	-- 2. Animasi Getar Jam Alarm Kartun (Cartoon Alarm Clock Ringing Loop)
-	task.spawn(function()
-		while self.running do
-			local timerIcon = self.timerIconRef:getValue()
-			if timerIcon then
-				local t1 = TweenService:Create(
-					timerIcon,
-					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{
-						Rotation = -16,
-					}
-				)
-				local t2 = TweenService:Create(
-					timerIcon,
-					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{
-						Rotation = 16,
-					}
-				)
-				local t3 = TweenService:Create(
-					timerIcon,
-					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{
-						Rotation = -12,
-					}
-				)
-				local t4 = TweenService:Create(
-					timerIcon,
-					TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-					{
-						Rotation = 12,
-					}
-				)
-				local t5 = TweenService:Create(
-					timerIcon,
-					TweenInfo.new(0.08, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-					{
-						Rotation = 0,
-					}
-				)
-
-				t1:Play()
-				t1.Completed:Wait()
-				t2:Play()
-				t2.Completed:Wait()
-				t3:Play()
-				t3.Completed:Wait()
-				t4:Play()
-				t4.Completed:Wait()
-				t5:Play()
-				t5.Completed:Wait()
-			end
-			task.wait(0.55)
-		end
+	-- 2. Animasi Getar Jam Alarm Kartun
+	DigMinigameHelper.StartAlarmAnimation(function()
+		return self.running
+	end, function()
+		return self.timerIconRef:getValue()
 	end)
 
 	-- 3. Animasi Idle Pulse Lembut Teks "TAP"
-	task.spawn(function()
-		while self.running do
-			local tapText = self.tapTextRef:getValue()
-			if tapText then
-				local breatheIn = TweenService:Create(
-					tapText,
-					TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-					{
-						Size = UDim2.fromScale(0.38, 0.80),
-					}
-				)
-				breatheIn:Play()
-				breatheIn.Completed:Wait()
-
-				local breatheOut = TweenService:Create(
-					tapText,
-					TweenInfo.new(0.5, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-					{
-						Size = UDim2.fromScale(0.32, 0.70),
-					}
-				)
-				breatheOut:Play()
-				breatheOut.Completed:Wait()
-			else
-				task.wait(0.2)
-			end
-		end
+	DigMinigameHelper.StartTapPulseAnimation(function()
+		return self.running
+	end, function()
+		return self.tapTextRef:getValue()
 	end)
 end
 
@@ -144,90 +69,23 @@ function DigMinigame:didUpdate(previousProps)
 	local hpRatio = math.clamp(currentHp / maxHp, 0, 1)
 	local progress = 1 - hpRatio
 
-	-- 1. Tweening Halus Penambahan Progress Bar (Smooth Bar Action)
 	local clipFrame = self.clipFrameRef:getValue()
-	if clipFrame then
-		local barTween =
-			TweenService:Create(clipFrame, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-				Size = UDim2.new(progress, 0, 1, 0),
-			})
-		barTween:Play()
-	end
-
-	-- Update UIGradient fade dinamis mengikuti progress dan batas hpRatio (0.8 -> 0.5)
+	local shovel = self.shovelRef:getValue()
 	local uiGradient = self.uiGradientRef:getValue()
+	local tapText = self.tapTextRef:getValue()
+
+	-- 1. Tweening Progress Bar & Posisi Sekop
+	DigMinigameHelper.AnimateBarProgress(clipFrame, shovel, progress)
+
+	-- 2. Update UIGradient fade dinamis
 	if uiGradient then
 		uiGradient.Transparency = DigMinigameHelper.GetFadeTransparencySequence(progress, hpRatio)
 	end
 
-	-- 2. Animasi Shovel (Getar Kiri-Kanan, Pop-Up Membesar & Efek Impact berbasis Skala)
-	local shovel = self.shovelRef:getValue()
-	if shovel then
-		-- Tween pergeseran posisi X mengikuti ujung bar
-		TweenService:Create(shovel, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-			Position = UDim2.new(progress, 0, 0.5, 0),
-		}):Play()
-
-		-- Efek Getar & Impact saat HP berkurang (klik gali)
-		if currentHp < prevHp then
-			-- Impact Pop Sekop: Membesar seketika dan mengayun ke belakang
-			shovel.Size = UDim2.fromScale(0.15, 1.6)
-			shovel.Rotation = -32
-
-			-- Getaran Step 1 (Ayun ke Kanan)
-			local shake1 =
-				TweenService:Create(shovel, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-					Rotation = 18,
-					Size = UDim2.fromScale(0.14, 1.5),
-				})
-			shake1:Play()
-
-			shake1.Completed:Connect(function()
-				-- Getaran Step 2 (Ayun ke Kiri)
-				local shake2 =
-					TweenService:Create(shovel, TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-						Rotation = -22,
-						Size = UDim2.fromScale(0.13, 1.4),
-					})
-				shake2:Play()
-
-				shake2.Completed:Connect(function()
-					-- Kembali ke posisi istirahat normal (Bounce Back)
-					TweenService:Create(shovel, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-						Rotation = -10,
-						Size = UDim2.fromScale(0.12, 1.35),
-					}):Play()
-				end)
-			end)
-		end
-	end
-
-	-- 3. Animasi Getar & Impact Teks "TAP" di Tengah Saat Diklik
-	local tapText = self.tapTextRef:getValue()
-	if tapText and currentHp < prevHp then
-		tapText.Size = UDim2.fromScale(0.44, 0.92)
-		tapText.Rotation = -8
-
-		local tapShake = TweenService:Create(
-			tapText,
-			TweenInfo.new(0.06, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-			{
-				Rotation = 6,
-				Size = UDim2.fromScale(0.38, 0.82),
-			}
-		)
-		tapShake:Play()
-
-		tapShake.Completed:Connect(function()
-			TweenService:Create(
-				tapText,
-				TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-				{
-					Rotation = 0,
-					Size = UDim2.fromScale(0.35, 0.75),
-				}
-			):Play()
-		end)
+	-- 3. Animasi Impact saat HP berkurang (klik gali)
+	if currentHp < prevHp then
+		DigMinigameHelper.AnimateShovelHit(shovel)
+		DigMinigameHelper.AnimateTapHit(tapText)
 	end
 end
 
@@ -245,13 +103,6 @@ function DigMinigame:render()
 	local hpRatio = math.clamp(currentHp / maxHp, 0, 1)
 	local progress = 1 - hpRatio
 
-	-- Asset IDs
-	local outerContainerAsset = "rbxassetid://77990043906183" -- Container Frame Luar
-	local innerProgressBarAsset = "rbxassetid://105807504905048" -- Progress Bar Hijau Dalam
-	local countdownAsset = "rbxassetid://126607445864603" -- Countdown Merah Bawah
-	local timerIconAsset = "rbxassetid://109376754540674" -- Logo Timer Icon
-	local shovelAsset = "rbxassetid://81621266214171" -- Shovel Icon Indicator
-
 	return Roact.createElement("ScreenGui", {
 		ResetOnSpawn = false,
 		DisplayOrder = 20,
@@ -259,7 +110,8 @@ function DigMinigame:render()
 		-- Container Utama Minigame (Responsif berbasis Scale untuk semua layar HP / PC)
 		MainContainer = Roact.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 0.5),
-			Position = UDim2.fromScale(0.5, 0.76),
+			-- Position = UDim2.fromScale(0.5, 0.67),
+			Position = if deviceType == "Mobile" then UDim2.fromScale(0.5, 0.625) else UDim2.fromScale(0.5, 0.7),
 			Size = UDim2.fromScale(0.65, 0.088),
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
@@ -282,7 +134,7 @@ function DigMinigame:render()
 				Position = UDim2.fromScale(0.5, 0.5),
 				Size = UDim2.fromScale(1, 1),
 				BackgroundTransparency = 1,
-				Image = outerContainerAsset,
+				Image = ASSETS.OuterContainer,
 				ScaleType = Enum.ScaleType.Stretch,
 				AutoButtonColor = false,
 
@@ -317,7 +169,7 @@ function DigMinigame:render()
 							Position = UDim2.fromScale(0, 0.5),
 							Size = UDim2.new(1 / math.max(progress, 0.0001), 0, 1, 0),
 							BackgroundTransparency = 1,
-							Image = innerProgressBarAsset,
+							Image = ASSETS.InnerProgressBar,
 							ScaleType = Enum.ScaleType.Stretch,
 							ZIndex = 2,
 						}, {
@@ -359,10 +211,10 @@ function DigMinigame:render()
 						[Roact.Ref] = self.shovelRef,
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						Position = UDim2.new(progress, 0, 0.5, 0),
-						Size = UDim2.fromScale(0.12, 1.35),
+						Size = UDim2.fromScale(1, 2.5),
 						Rotation = -10,
 						BackgroundTransparency = 1,
-						Image = shovelAsset,
+						Image = ASSETS.Shovel,
 						ZIndex = 5,
 					}, {
 						UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
@@ -378,7 +230,7 @@ function DigMinigame:render()
 				Position = UDim2.fromScale(0, 1.575),
 				Size = UDim2.fromScale(0.32, 0.58),
 				BackgroundTransparency = 1,
-				Image = countdownAsset,
+				Image = ASSETS.Countdown,
 				ScaleType = Enum.ScaleType.Fit,
 			}, {
 				UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {
@@ -393,7 +245,7 @@ function DigMinigame:render()
 					Position = UDim2.fromScale(-0.12, 0.4),
 					Size = UDim2.fromScale(1, 1.55),
 					BackgroundTransparency = 1,
-					Image = timerIconAsset,
+					Image = ASSETS.TimerIcon,
 					ZIndex = 3,
 				}, {
 					UIAspectRatioConstraint = Roact.createElement("UIAspectRatioConstraint", {

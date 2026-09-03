@@ -1,18 +1,24 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
+local DeviceHelper = require(ReplicatedStorage.Shared.Common.DeviceHelper)
 local Roact = require(Packages:WaitForChild("Roact"))
-local HotbarSlot = require(script.Parent.Common.HotbarSlot)
+
+local Common = script.Parent.Common
+local HotbarSlot = require(Common.HotbarSlot)
+local AutoButton = require(Common.AutoButton)
+local HotbarHelper = require(Common.HotbarHelper)
+
+export type ItemSlotData = HotbarHelper.ItemSlotData
+
+local ASSET_IMAGES = {
+	Shovel = "rbxassetid://89491227108779",
+	Inventory = "rbxassetid://132406087548548",
+	Shop = "rbxassetid://131110815703277",
+}
 
 local HotbarGui = Roact.Component:extend("HotbarGui")
-
-type ItemSlotData = {
-	UUID: string?,
-	ItemId: string,
-	Count: number,
-	Image: string?,
-	FallbackEmoji: string?,
-}
+local deviceType = DeviceHelper.GetDeviceType()
 
 function HotbarGui:render()
 	local isShovelEquipped = self.props.IsShovelEquipped or false
@@ -20,50 +26,23 @@ function HotbarGui:render()
 	local isShopOpen = self.props.IsShopOpen or false
 	local activeEquippedItem = self.props.ActiveEquippedItem or ""
 	local activeEquippedUUID = self.props.ActiveEquippedUUID or ""
-
-	local itemSlots: { ItemSlotData } = self.props.ItemSlots or {}
+	local isAutoActive = self.props.IsAutoActive or false
 
 	local onToggleShovel = self.props.OnToggleShovel
 	local onToggleInventory = self.props.OnToggleInventory
 	local onToggleShop = self.props.OnToggleShop
 	local onEquipItem = self.props.OnEquipItem
+	local onToggleAuto = self.props.OnToggleAuto
 
-	local inventoryImage = "rbxassetid://81621266214171"
-	local shopImage = "rbxassetid://131110815703277"
-
-	-- Filter item slots valid (maksimal 4 item untuk slot 4 hingga 7)
-	local validItemSlots: { ItemSlotData } = {}
-	for _, itemData in ipairs(itemSlots) do
-		local itemId = if typeof(itemData) == "table" then (itemData.ItemId or "") else tostring(itemData)
-		local uuid = if typeof(itemData) == "table" then (itemData.UUID or "") else ""
-		local count = if typeof(itemData) == "table" and itemData.Count then itemData.Count else 1
-		local image = if typeof(itemData) == "table" and itemData.Image then itemData.Image else ""
-		local fallbackEmoji = if typeof(itemData) == "table" and itemData.FallbackEmoji then itemData.FallbackEmoji else "💎"
-
-		if itemId ~= "" and count > 0 and #validItemSlots < 4 then
-			table.insert(validItemSlots, {
-				UUID = uuid,
-				ItemId = itemId,
-				Count = count,
-				Image = image,
-				FallbackEmoji = fallbackEmoji,
-			})
-		end
-	end
+	local validItemSlots = HotbarHelper.FilterValidItemSlots(self.props.ItemSlots)
+	local totalVisibleSlots = 3 + #validItemSlots
+	local wrapperWidthScale = HotbarHelper.CalculateWrapperWidth(totalVisibleSlots)
+	local wrapperHeightScale = if deviceType == "Mobile" then 0.15 else 0.095
 
 	local slotChildren: { [string]: any } = {
-		UICorner = Roact.createElement("UICorner", {
-			CornerRadius = UDim.new(0, 16),
-		}),
-
-		UIStroke = Roact.createElement("UIStroke", {
-			Color = Color3.fromRGB(60, 70, 90),
-			Thickness = 1.5,
-		}),
-
 		UIListLayout = Roact.createElement("UIListLayout", {
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 8),
+			Padding = UDim.new(0.03, 0),
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
 			FillDirection = Enum.FillDirection.Horizontal,
@@ -73,56 +52,53 @@ function HotbarGui:render()
 		ShovelSlot = Roact.createElement(HotbarSlot, {
 			LayoutOrder = 1,
 			KeyText = "1",
+			Image = ASSET_IMAGES.Shovel,
 			FallbackEmoji = "⚒️",
 			IsActive = isShovelEquipped and activeEquippedItem == "",
 			OnActivated = onToggleShovel,
+			Size = UDim2.fromScale(1, 1),
 		}),
 
 		-- Slot 2: [2] Inventory
 		InventorySlot = Roact.createElement(HotbarSlot, {
 			LayoutOrder = 2,
 			KeyText = "2",
-			Image = inventoryImage,
+			Image = ASSET_IMAGES.Inventory,
 			FallbackEmoji = "🎒",
 			IsActive = isInventoryOpen,
 			OnActivated = onToggleInventory,
+			Size = UDim2.fromScale(1, 1),
+			IconSize = UDim2.fromScale(0.72, 0.72),
 		}),
 
 		-- Slot 3: [3] Shop
 		ShopSlot = Roact.createElement(HotbarSlot, {
 			LayoutOrder = 3,
 			KeyText = "3",
-			Image = shopImage,
+			Image = ASSET_IMAGES.Shop,
 			FallbackEmoji = "🛒",
 			IsActive = isShopOpen,
 			OnActivated = onToggleShop,
+			Size = UDim2.fromScale(1, 1),
+			IconSize = UDim2.fromScale(0.68, 0.68),
 		}),
 	}
 
 	-- Slots 4 hingga 7 (Muncul dinamis HANYA jika ada item di inventaris)
 	for i, itemData in ipairs(validItemSlots) do
-		local slotKey = tostring(i + 3) -- Key 4, 5, 6, 7
+		local slotKey = tostring(i + 3)
 		local uuid = itemData.UUID or ""
 		local itemId = itemData.ItemId
-		local count = itemData.Count
-		local image = itemData.Image or ""
-		local fallbackEmoji = itemData.FallbackEmoji or "💎"
-
-		-- Cek aktif secara presisi berdasarkan UUID unik item!
-		local isActive = false
-		if activeEquippedUUID ~= "" and uuid ~= "" then
-			isActive = (activeEquippedUUID == uuid)
-		elseif activeEquippedUUID == "" and activeEquippedItem ~= "" then
-			isActive = (activeEquippedItem == itemId and i == 1)
-		end
+		local isActive = HotbarHelper.IsSlotActive(activeEquippedUUID, activeEquippedItem, uuid, itemId, i)
 
 		slotChildren["ItemSlot_" .. slotKey] = Roact.createElement(HotbarSlot, {
 			LayoutOrder = i + 3,
 			KeyText = slotKey,
-			Image = image,
-			FallbackEmoji = fallbackEmoji,
-			Count = count,
+			Image = itemData.Image or "",
+			FallbackEmoji = itemData.FallbackEmoji or "💎",
+			Count = itemData.Count,
 			IsActive = isActive,
+			Size = UDim2.fromScale(1, 1),
 			OnActivated = function()
 				if onEquipItem then
 					onEquipItem(uuid, itemId)
@@ -131,20 +107,24 @@ function HotbarGui:render()
 		})
 	end
 
-	-- Hitung lebar kontainer responsif dinamis berdasarkan jumlah slot aktif
-	local totalVisibleSlots = 3 + #validItemSlots
-	local containerWidth = (totalVisibleSlots * 60) + ((totalVisibleSlots - 1) * 8) + 24
-
 	return Roact.createElement("ScreenGui", {
 		ResetOnSpawn = false,
 		DisplayOrder = 10,
 	}, {
-		HotbarContainer = Roact.createElement("Frame", {
+		AutoButton = Roact.createElement(AutoButton, {
+			IsActive = isAutoActive,
+			OnToggle = onToggleAuto,
+			-- Position = UDim2.fromScale(0.5, 0.86),
+			Position = if deviceType == "Mobile" then UDim2.fromScale(0.5, 0.78) else UDim2.fromScale(0.5, 0.86),
+			Size = if deviceType == "Mobile" then UDim2.fromScale(0.1, 0.07) else UDim2.fromScale(0.12, 0.045),
+		}),
+
+		HotbarWrapper = Roact.createElement("Frame", {
 			AnchorPoint = Vector2.new(0.5, 1),
-			Position = UDim2.new(0.5, 0, 1, -20),
-			Size = UDim2.fromOffset(containerWidth, 76),
-			BackgroundColor3 = Color3.fromRGB(18, 22, 32),
-			BackgroundTransparency = 0.25,
+			Position = UDim2.fromScale(0.5, 0.98),
+			-- Size = UDim2.fromScale(wrapperWidthScale, 0.095),
+			Size = UDim2.fromScale(wrapperWidthScale, wrapperHeightScale),
+			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 		}, slotChildren),
 	})

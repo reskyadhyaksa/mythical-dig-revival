@@ -29,6 +29,12 @@
       }
     },
 
+    "StarterGui": {
+      "$properties": {
+        "ScreenOrientation": "LandscapeSensor"
+      }
+    },
+
     "Workspace": {
       "$properties": {
         "FilteringEnabled": true

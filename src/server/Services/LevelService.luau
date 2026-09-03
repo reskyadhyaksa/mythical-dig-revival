@@ -19,12 +19,21 @@ function LevelService.AddEXP(playerProfile: any, expAmount: number, player: Play
 	while data.EXP >= expNeeded do
 		data.EXP -= expNeeded
 		data.Level = (data.Level or 0) + 1
+		data.Luck = LevelConfig.GetLuckString(data.Level)
 		leveledUp = true
 		expNeeded = LevelConfig.GetEXPForNextLevel(data.Level)
-		print(string.format("🎉 PLAYER LEVELED UP! Current Level: %d", data.Level))
+		print(string.format("🎉 PLAYER LEVELED UP! Current Level: %d (Luck: %s)", data.Level, data.Luck))
 
-		if player and player.Character then
-			NameplateService.UpdateLevel(player.Character, data.Level)
+		if player then
+			if player.Character then
+				NameplateService.UpdateLevel(player.Character, data.Level)
+			end
+
+			local remotesFolder = ReplicatedStorage:FindFirstChild("Remotes")
+			local playerDataLoadedRE = remotesFolder and remotesFolder:FindFirstChild("PlayerDataLoaded") :: RemoteEvent?
+			if playerDataLoadedRE then
+				playerDataLoadedRE:FireClient(player, data)
+			end
 		end
 	end
 

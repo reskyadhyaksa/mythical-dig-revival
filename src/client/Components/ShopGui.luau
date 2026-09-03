@@ -2,7 +2,9 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Roact = require(Packages:WaitForChild("Roact"))
-local Shovels = require(ReplicatedStorage.Shared.Data.Shovels) :: any
+local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
+local dataFolder = sharedFolder:WaitForChild("Data")
+local Shovels = require(dataFolder:WaitForChild("Shovels")) :: any
 
 local ShopGui = Roact.Component:extend("ShopGui")
 

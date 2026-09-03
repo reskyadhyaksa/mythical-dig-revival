@@ -1,8 +1,8 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 
 local TWEEN_ENTER_INFO = TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 local TWEEN_LEAVE_INFO = TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)

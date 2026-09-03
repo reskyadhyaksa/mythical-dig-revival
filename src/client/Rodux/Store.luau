@@ -1,6 +1,7 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Rodux = require(ReplicatedStorage.Packages.Rodux)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Rodux = require(packagesFolder:WaitForChild("Rodux"))
 
 local Reducers = require(script.Parent.Reducers)
 

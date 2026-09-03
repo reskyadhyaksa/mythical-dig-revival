@@ -5,8 +5,12 @@ local UserInputService = game:GetService("UserInputService")
 local StarterGui = game:GetService("StarterGui")
 local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
 local Roact = require(packagesFolder:WaitForChild("Roact"))
-local HotbarGui = require(script.Parent.Parent.Components.HotbarGui)
-local Store = require(script.Parent.Parent.Rodux.Store)
+local clientFolder = script.Parent.Parent
+local componentsFolder = clientFolder:WaitForChild("Components")
+local roduxFolder = clientFolder:WaitForChild("Rodux")
+
+local HotbarGui = require(componentsFolder:WaitForChild("HotbarGui"))
+local Store = require(roduxFolder:WaitForChild("Store"))
 
 local HotbarController = {}
 local currentHandle: any = nil
@@ -14,6 +18,7 @@ local currentHandle: any = nil
 local isShovelEquipped = false
 local isInventoryOpen = false
 local isShopOpen = false
+local isAutoActive = false
 local activeEquippedItem = ""
 local activeEquippedUUID = ""
 
@@ -29,6 +34,7 @@ local onToggleShovelCb: (() -> ())? = nil
 local onToggleInventoryCb: (() -> ())? = nil
 local onToggleShopCb: (() -> ())? = nil
 local onEquipItemCb: ((uuid: string, itemId: string) -> ())? = nil
+local onToggleAutoCb: (() -> ())? = nil
 
 local inputConnection: RBXScriptConnection? = nil
 
@@ -46,6 +52,7 @@ local function UpdateUI()
 		IsShovelEquipped = isShovelEquipped,
 		IsInventoryOpen = isInventoryOpen,
 		IsShopOpen = isShopOpen,
+		IsAutoActive = isAutoActive,
 		ActiveEquippedItem = activeEquippedItem,
 		ActiveEquippedUUID = activeEquippedUUID,
 		ItemSlots = currentInventory,
@@ -53,16 +60,23 @@ local function UpdateUI()
 		OnToggleInventory = onToggleInventoryCb,
 		OnToggleShop = onToggleShopCb,
 		OnEquipItem = onEquipItemCb,
+		OnToggleAuto = onToggleAutoCb,
 	})
 
 	currentHandle = Roact.update(currentHandle, element)
 end
 
+-- Sinkronisasi reaktif: Update Hotbar otomatis setiap kali data Store/Inventaris berubah
+Store.changed:connect(function(_state)
+	UpdateUI()
+end)
+
 function HotbarController.MountHotbar(
 	onToggleShovel: () -> (),
 	onToggleInventory: () -> (),
 	onToggleShop: () -> (),
-	onEquipItem: (uuid: string, itemId: string) -> ()
+	onEquipItem: (uuid: string, itemId: string) -> (),
+	onToggleAuto: (() -> ())?
 )
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
@@ -70,6 +84,7 @@ function HotbarController.MountHotbar(
 	onToggleInventoryCb = onToggleInventory
 	onToggleShopCb = onToggleShop
 	onEquipItemCb = onEquipItem
+	onToggleAutoCb = onToggleAuto
 
 	local state = Store:getState()
 	local currentInventory = (state and state.Inventory) or {}
@@ -78,6 +93,7 @@ function HotbarController.MountHotbar(
 		IsShovelEquipped = isShovelEquipped,
 		IsInventoryOpen = isInventoryOpen,
 		IsShopOpen = isShopOpen,
+		IsAutoActive = isAutoActive,
 		ActiveEquippedItem = activeEquippedItem,
 		ActiveEquippedUUID = activeEquippedUUID,
 		ItemSlots = currentInventory,
@@ -85,6 +101,7 @@ function HotbarController.MountHotbar(
 		OnToggleInventory = onToggleInventory,
 		OnToggleShop = onToggleShop,
 		OnEquipItem = onEquipItem,
+		OnToggleAuto = onToggleAuto,
 	})
 
 	if currentHandle then
@@ -173,6 +190,11 @@ function HotbarController.SetState(
 end
 
 function HotbarController.SetInventory(newInventory: any)
+	UpdateUI()
+end
+
+function HotbarController.SetAutoState(active: boolean)
+	isAutoActive = active
 	UpdateUI()
 end
 

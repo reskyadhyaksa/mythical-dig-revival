@@ -1,7 +1,7 @@
 --!strict
 local NameplateService = {}
 
-local MAX_VIEW_DISTANCE_STUDS = 20
+local MAX_VIEW_DISTANCE_STUDS = 35
 
 function NameplateService.CreateNameplate(player: Player, character: Model, level: number)
 	task.spawn(function()
@@ -34,19 +34,9 @@ function NameplateService.CreateNameplate(player: Player, character: Model, leve
 		local container = Instance.new("Frame")
 		container.Name = "Container"
 		container.Size = UDim2.fromScale(1, 1)
-		container.BackgroundColor3 = Color3.fromRGB(15, 18, 26)
-		container.BackgroundTransparency = 0.2
+		container.BackgroundTransparency = 1
 		container.BorderSizePixel = 0
 		container.Parent = billboard
-
-		local uiCorner = Instance.new("UICorner")
-		uiCorner.CornerRadius = UDim.new(0, 10)
-		uiCorner.Parent = container
-
-		local uiStroke = Instance.new("UIStroke")
-		uiStroke.Color = Color3.fromRGB(241, 196, 15)
-		uiStroke.Thickness = 1.5
-		uiStroke.Parent = container
 
 		local nameLabel = Instance.new("TextLabel")
 		nameLabel.Name = "NameLabel"
@@ -56,20 +46,31 @@ function NameplateService.CreateNameplate(player: Player, character: Model, leve
 		nameLabel.Text = player.DisplayName
 		nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 		nameLabel.Font = Enum.Font.GothamBlack
+		nameLabel.TextStrokeColor3 = Color3.fromHex("00426D")
+		nameLabel.TextStrokeTransparency = 0
 		nameLabel.TextSize = 14
 		nameLabel.TextScaled = true
+
+		local nameStroke = Instance.new("UIStroke")
+		nameStroke.Color = Color3.fromHex("00426D")
+		nameStroke.Thickness = 1.5
+		nameStroke.Parent = nameLabel
+
 		nameLabel.Parent = container
 
 		local levelLabel = Instance.new("TextLabel")
 		levelLabel.Name = "LevelLabel"
 		levelLabel.Position = UDim2.fromScale(0, 0.54)
-		levelLabel.Size = UDim2.fromScale(1, 0.38)
+		levelLabel.Size = UDim2.fromScale(1, 0.25)
 		levelLabel.BackgroundTransparency = 1
-		levelLabel.Text = string.format("Level %d", level)
-		levelLabel.TextColor3 = Color3.fromRGB(255, 215, 0)
+		levelLabel.Text = string.format("Lvl: %d", level)
+		levelLabel.TextColor3 = Color3.fromRGB(202, 148, 0)
 		levelLabel.Font = Enum.Font.GothamBold
+		levelLabel.TextStrokeColor3 = Color3.fromRGB(255, 255, 255)
+		levelLabel.TextStrokeTransparency = 0
 		levelLabel.TextSize = 12
 		levelLabel.TextScaled = true
+
 		levelLabel.Parent = container
 
 		billboard.Parent = head

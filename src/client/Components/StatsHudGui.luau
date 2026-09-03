@@ -1,8 +1,10 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Packages = ReplicatedStorage.Packages
-local Roact = require(Packages.Roact)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 local StatBar = require(script.Parent.Common.StatBar)
+local DeviceHelper = require(sharedFolder:WaitForChild("Common"):WaitForChild("DeviceHelper"))
 
 local StatsHudGui = Roact.Component:extend("StatsHudGui")
 
@@ -21,22 +23,25 @@ end
 function StatsHudGui:render()
 	local coins = self.props.Coins or 0
 	local luck = self.props.Luck or "+100%"
-	local coinImage = "rbxassetid://105775835245385"
-	local luckImage = self.props.LuckImage or ""
+	local coinImage = "rbxassetid://122992611665292"
+	local luckImage = "rbxassetid://100488739842115"
+
+	local deviceType = DeviceHelper.GetDeviceType()
+	local sizeContainer = if deviceType == "Mobile" then UDim2.fromScale(0.165, 0.25) else UDim2.fromScale(0.18, 0.2)
 
 	return Roact.createElement("ScreenGui", {
 		ResetOnSpawn = false,
 	}, {
 		ListContainer = Roact.createElement("Frame", {
 			AnchorPoint = Vector2.new(0, 1),
-			Position = UDim2.new(0, 20, 1, -20),
-			Size = UDim2.fromOffset(220, 110),
+			Position = UDim2.new(0.01, 0, 0.95, 0),
+			Size = sizeContainer,
 			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 		}, {
 			UIListLayout = Roact.createElement("UIListLayout", {
 				SortOrder = Enum.SortOrder.LayoutOrder,
-				Padding = UDim.new(0, 8),
+				Padding = UDim.new(0.125, 0),
 				HorizontalAlignment = Enum.HorizontalAlignment.Left,
 				VerticalAlignment = Enum.VerticalAlignment.Bottom,
 			}),
@@ -50,7 +55,6 @@ function StatsHudGui:render()
 				StrokeColor = Color3.fromRGB(46, 204, 113), -- Hijau Emerald
 				GradientStartColor = Color3.fromRGB(46, 204, 113),
 				GradientEndColor = Color3.fromRGB(15, 60, 30),
-				IconSize = 50,
 			}),
 
 			-- 2. StatBar Coins (Bawah)
@@ -62,7 +66,6 @@ function StatsHudGui:render()
 				StrokeColor = Color3.fromRGB(241, 196, 15), -- Emas
 				GradientStartColor = Color3.fromRGB(241, 196, 15),
 				GradientEndColor = Color3.fromRGB(60, 45, 10),
-				IconSize = 50,
 			}),
 		}),
 	})

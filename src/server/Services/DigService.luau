@@ -1,8 +1,9 @@
 --!strict
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Items = require(ReplicatedStorage.Shared.Data.Items) :: any
-local Shovels = require(ReplicatedStorage.Shared.Data.Shovels) :: any
-local LevelConfig = require(ReplicatedStorage.Shared.Data.LevelConfig) :: any
+local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
+local ItemHelper = require(sharedFolder:WaitForChild("Common"):WaitForChild("ItemHelper")) :: any
+local Shovels = require(sharedFolder:WaitForChild("Data"):WaitForChild("Shovels")) :: any
+local LevelConfig = require(sharedFolder:WaitForChild("Data"):WaitForChild("LevelConfig")) :: any
 local ZoneService = require(script.Parent.ZoneService) :: any
 local LevelService = require(script.Parent.LevelService) :: any
 local InventoryService = require(script.Parent.InventoryService) :: any
@@ -35,20 +36,18 @@ function DigService.CancelDig(player: Player)
 	activeDigs[player] = nil
 end
 
-function DigService.StartDigNode(player: Player, playerProfile: any): ActiveDigState?
+function DigService.StartDigNode(player: Player, playerProfile: any, luckMultiplier: number?): ActiveDigState?
 	if activeDigs[player] then
 		return activeDigs[player]
 	end
 
-	-- Cek Batas Maksimal Kapasitas (Jumlah Item & Total Berat) Berdasarkan Level Player
+	-- Cek Batas Maksimal Kapasitas (Jumlah Slot Item) Berdasarkan Level Player
 	local playerLevel = playerProfile.Data and playerProfile.Data.Level or 0
 	local maxCapacity = LevelConfig.GetMaxInventoryCapacity(playerLevel)
-	local maxWeight = LevelConfig.GetMaxWeightCapacity(playerLevel)
 	local currentCount = InventoryService.GetTotalItemCount(playerProfile.Data and playerProfile.Data.Inventory)
-	local currentWeight = Items.GetTotalInventoryWeight(playerProfile.Data and playerProfile.Data.Inventory)
 
-	if currentCount >= maxCapacity or currentWeight >= maxWeight then
-		print(string.format("⚠️ INVENTORY OVERWEIGHT/FULL! (Items: %d/%d | Weight: %.1f/%.1f kg)", currentCount, maxCapacity, currentWeight, maxWeight))
+	if currentCount >= maxCapacity then
+		print(string.format("⚠️ INVENTORY FULL! (Items: %d/%d)", currentCount, maxCapacity))
 		return nil
 	end
 
@@ -64,14 +63,17 @@ function DigService.StartDigNode(player: Player, playerProfile: any): ActiveDigS
 	local equippedShovelId = playerProfile.Data and playerProfile.Data.EquippedShovel or "WoodenShovel"
 	local shovelInfo = Shovels.GetShovel(equippedShovelId)
 	local shovelPower = shovelInfo and shovelInfo.DigPower or 10
-
 	local forcedTier = forcedNextTier[player]
 	forcedNextTier[player] = nil -- Reset setelah digunakan 1x
 
-	local selectedItem = Items.GetRandomItem(islandId, forcedTier, groundMaterial)
-	local itemHP = Items.GetHP(selectedItem.Id)
-	local minDigPower = Items.GetMinDigPower(selectedItem.Id)
-	local timeLimit = Items.GetTimeLimit(selectedItem.Id)
+	-- Perhitungan Total Luck Multiplier: Base Player Level (+10% per level) x Minigame Hold Multiplier
+	local baseLevelMultiplier = LevelConfig.GetTotalLuck(playerLevel) / 100 -- Level 0 = 1.0x, Level 10 = 2.0x
+	local totalLuck = baseLevelMultiplier * (luckMultiplier or 1.0)
+
+	local selectedItem = ItemHelper.GetRandomItem(islandId, forcedTier, groundMaterial, shovelPower, totalLuck)
+	local itemHP = ItemHelper.GetHP(selectedItem.Id)
+	local minDigPower = ItemHelper.GetMinDigPower(selectedItem.Id)
+	local timeLimit = ItemHelper.GetTimeLimit(selectedItem.Id)
 
 	local isTooWeak = shovelPower < minDigPower
 
@@ -97,13 +99,13 @@ function DigService.SwingShovel(player: Player, playerProfile: any)
 		return
 	end
 
-	-- Perlawanan 1: Jika Sekop Terlalu Lemah, Item Tidak Bisa Tergali
+	-- Perlawanan: Jika Sekop Terlalu Lemah, Item Tidak Bisa Tergali
 	if digState.IsTooWeak then
 		print(string.format("⚠️ SHOVEL TOO WEAK! DigPower: %d vs MinRequired: %d", digState.ShovelPower, digState.MinDigPower))
 		return
 	end
 
-	-- Perlawanan 2: Cek Batas Waktu Minigame (Item Hilang jika melebih batas waktu)
+	-- Cek Batas Waktu Minigame (Item Hilang jika melebih batas waktu)
 	local elapsed = os.clock() - digState.StartTime
 	if elapsed > digState.TimeLimit then
 		print("⏱️ TIME EXPIRED! Item escaped/destroyed due to resistance.")
@@ -129,7 +131,13 @@ function DigService.SwingShovel(player: Player, playerProfile: any)
 
 	if digState.CurrentHP <= 0 then
 		local item = digState.TargetItem
-		InventoryService.AddItem(playerProfile, item.Id)
+		local shovelPower = digState.ShovelPower or 10
+		local rolledWeight, isMaxTon = ItemHelper.RollWeight(item.Id, shovelPower)
+		InventoryService.AddItem(playerProfile, item.Id, rolledWeight)
+
+		if isMaxTon then
+			print(string.format("🌟 MAX TON DROP! Player %s found a GIANT %s (%.2fkg)!", player.Name, item.Name or item.Id, rolledWeight))
+		end
 
 		-- Berikan EXP berdasarkan Rarity Item
 		local expGained = LevelConfig.GetEXPFromRarity(item.Rarity)
@@ -137,14 +145,14 @@ function DigService.SwingShovel(player: Player, playerProfile: any)
 
 		-- Spawn 3D Model visual effect (Melompat ke atas, jatuh ke belakang player & hilang setelah 2 detik)
 		if player.Character then
-			DigService.SpawnItemModel(item.Id, player.Character)
+			DigService.SpawnItemModel(item.Id, player.Character, rolledWeight)
 		end
 
 		activeDigs[player] = nil
 	end
 end
 
-function DigService.SpawnItemModel(itemId: string, character: Model): Instance?
+function DigService.SpawnItemModel(itemId: string, character: Model, itemWeight: number?): Instance?
 	local Debris = game:GetService("Debris")
 	local Players = game:GetService("Players")
 	local player = Players:GetPlayerFromCharacter(character)
@@ -164,12 +172,26 @@ function DigService.SpawnItemModel(itemId: string, character: Model): Instance?
 		return nil
 	end
 
-	local itemTemplate = itemsFolder:FindFirstChild(itemId)
+	-- Recursive search (true) agar menemukan item di dalam subfolder seperti Items/Island1/
+	local itemTemplate = itemsFolder:FindFirstChild(itemId, true)
 	if not itemTemplate then
 		return nil
 	end
 
 	local itemClone = itemTemplate:Clone()
+
+	-- Terapkan Skala Ukuran 3D Langsung pada Part / MeshPart (Berdasarkan Size Part)
+	local scaleFactor = 1.0
+	if itemWeight then
+		scaleFactor = ItemHelper.GetScaleFactor(itemId, itemWeight)
+	end
+
+	if itemClone:IsA("Model") then
+		local baseScale = itemClone:GetScale()
+		itemClone:ScaleTo(baseScale * scaleFactor)
+	elseif itemClone:IsA("BasePart") then
+		itemClone.Size = itemClone.Size * scaleFactor
+	end
 
 	-- Tentukan Part Utama untuk menerima Impuls Fisika
 	local mainPart: BasePart? = nil
@@ -186,24 +208,36 @@ function DigService.SpawnItemModel(itemId: string, character: Model): Instance?
 		return nil
 	end
 
-	-- Posisikan di BELAKANG KEPALA player (0, 3, 1) agar tidak pernah tersangkut di tubuh player
-	local spawnCFrame = hrp.CFrame * CFrame.new(0, 3, 1)
+	-- Posisikan di BELAKANG player (0, 2, 2.5) di luar hitbox karakter
+	local spawnCFrame = hrp.CFrame * CFrame.new(0, 2, 2.5)
 	if itemClone:IsA("Model") then
 		itemClone:PivotTo(spawnCFrame)
 	else
 		mainPart.CFrame = spawnCFrame
 	end
 
-	-- Persiapkan physics & ragdoll (Unanchor & aktifkan collision fisik penuh)
+	-- Persiapkan physics & ragdoll: Aktifkan collision ke tanah, tapi nonaktifkan tabrakan ke player
 	if itemClone:IsA("BasePart") then
 		itemClone.Anchored = false
 		itemClone.CanCollide = true
+		itemClone.Massless = true
+	end
+
+	-- Pasang NoCollisionConstraint agar item TIDAK PERNAH menghantam atau mendorong karakter pemain
+	for _, charPart in character:GetChildren() do
+		if charPart:IsA("BasePart") then
+			local noCollide = Instance.new("NoCollisionConstraint")
+			noCollide.Part0 = mainPart
+			noCollide.Part1 = charPart
+			noCollide.Parent = mainPart
+		end
 	end
 
 	for _, descendant in itemClone:GetDescendants() do
 		if descendant:IsA("BasePart") then
 			descendant.Anchored = false
 			descendant.CanCollide = true
+			descendant.Massless = true
 
 			if descendant ~= mainPart then
 				local existingWeld = descendant:FindFirstChildOfClass("WeldConstraint") or descendant:FindFirstChildOfClass("Weld")
@@ -212,6 +246,15 @@ function DigService.SpawnItemModel(itemId: string, character: Model): Instance?
 					weld.Part0 = mainPart
 					weld.Part1 = descendant
 					weld.Parent = descendant
+				end
+
+				for _, charPart in character:GetChildren() do
+					if charPart:IsA("BasePart") then
+						local noCollide = Instance.new("NoCollisionConstraint")
+						noCollide.Part0 = descendant
+						noCollide.Part1 = charPart
+						noCollide.Parent = descendant
+					end
 				end
 			end
 		end

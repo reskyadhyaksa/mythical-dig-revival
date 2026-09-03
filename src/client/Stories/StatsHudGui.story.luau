@@ -5,10 +5,13 @@ local Roact = require(Packages.Roact)
 local StatsHudGui = require(script.Parent.Parent.Components.StatsHudGui)
 
 return function(target: Instance)
-	local handle = Roact.mount(Roact.createElement(StatsHudGui, {
-		Coins = 12500,
-		Luck = "+100%",
-	}), target)
+	local handle = Roact.mount(
+		Roact.createElement(StatsHudGui, {
+			Coins = 1_250_000,
+			Luck = "+100%",
+		}),
+		target
+	)
 
 	return function()
 		Roact.unmount(handle)

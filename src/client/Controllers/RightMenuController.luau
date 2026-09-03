@@ -1,8 +1,11 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Roact = require(ReplicatedStorage.Packages.Roact)
-local RightMenuGui = require(script.Parent.Parent.Components.RightMenuGui)
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
+local clientFolder = script.Parent.Parent
+local componentsFolder = clientFolder:WaitForChild("Components")
+local RightMenuGui = require(componentsFolder:WaitForChild("RightMenuGui"))
 
 local RightMenuController = {}
 local currentHandle: any = nil

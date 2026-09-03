@@ -1,6 +1,11 @@
 --!strict
 export type RarityType = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary" | "Secret"
 
+export type WeightRange = {
+	Min: number,
+	Max: number,
+}
+
 export type ItemDef = {
 	Id: string,
 	Name: string,
@@ -12,7 +17,9 @@ export type ItemDef = {
 	SellPrice: number?, -- Harga jual item ke Toko / Sell UI (opsional)
 	MinDigPower: number?, -- Kekuatan sekop minimal yang dibutuhkan
 	TimeLimit: number?, -- Batas waktu minigame (detik) sebelum item lepas/rusak
-	Weight: number?, -- Berat item dalam kg (opsional, jika kosong menggunakan default berdasarkan Rarity)
+	MinWeight: number?, -- Berat minimum (kg) item ini saat di-roll
+	MaxWeight: number?, -- Berat maksimum / Max Ton (kg) item ini saat di-roll
+	Weight: number?, -- Berat default (opsional fallback jika MinWeight & MaxWeight tidak diset)
 }
 
 local RarityBaseHP: { [RarityType]: number } = {
@@ -51,42 +58,48 @@ local RarityBaseTimeLimit: { [RarityType]: number } = {
 	Secret = 6,
 }
 
-local RarityBaseWeight: { [RarityType]: number } = {
-	Common = 1.5,
-	Uncommon = 4.0,
-	Rare = 10.0,
-	Epic = 25.0,
-	Legendary = 50.0,
-	Secret = 150.0,
+-- Default rentang berat (Min & Max Weight dalam kg) berdasarkan Rarity jika tidak diset per item
+local RarityDefaultWeights: { [RarityType]: WeightRange } = {
+	Common = { Min = 1.0, Max = 5.0 },
+	Uncommon = { Min = 3.0, Max = 15.0 },
+	Rare = { Min = 8.0, Max = 40.0 },
+	Epic = { Min = 20.0, Max = 100.0 },
+	Legendary = { Min = 40.0, Max = 250.0 },
+	Secret = { Min = 100.0, Max = 1000.0 },
+}
+
+-- Material tanah yang diizinkan untuk menggali per pulau
+local IslandMaterials: { [string]: { string } } = {
+	["Island1"] = { "Grass", "Sand" },
+	["Island2"] = { "Slate", "Basalt", "Rock" },
 }
 
 local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 	["Island1"] = {
-		["IronOre"] = {
-			Id = "IronOre",
-			Name = "Iron Ore",
+		["AncientNail"] = {
+			Id = "AncientNail",
+			Name = "Ancient Nail",
 			Rarity = "Common",
 			Chance = 2,
-			RequiredMaterial = { "Grass", "Sand" },
 		},
-		["CopperOre"] = {
-			Id = "CopperOre",
-			Name = "Copper Ore",
-			Rarity = "Common",
+		["RabbitSkeleton"] = {
+			Id = "RabbitSkeleton",
+			Name = "Rabbit Skeleton",
+			Rarity = "Uncommon",
 			Chance = 2,
-			RequiredMaterial = "Sand",
+			MaxWeight = 10,
 		},
-		["ObsidianOre"] = {
-			Id = "ObsidianOre",
-			Name = "Obsidian Ore",
-			Rarity = "Rare",
-			Chance = 100,
-			RequiredMaterial = "Slate",
+		["RavenSkeleton"] = {
+			Id = "RavenSkeleton",
+			Name = "Raven Skeleton",
+			Rarity = "Uncommon",
+			Chance = 1000,
+			-- RequiredMaterial = "Slate",
 		},
-		["MithrilOre"] = {
-			Id = "MithrilOre",
-			Name = "Mithril Ore",
-			Rarity = "Legendary",
+		["StoneGolem"] = {
+			Id = "StoneGolem",
+			Name = "Stone Golem",
+			Rarity = "Uncommon",
 			Chance = 2500,
 		},
 	},
@@ -125,163 +138,13 @@ for islandId, itemList in ItemsByIsland do
 	end
 end
 
-local ItemsModule = {}
-ItemsModule.Dict = Items
-ItemsModule.ByIsland = ItemsByIsland
-
-function ItemsModule.GetHP(itemId: string): number
-	local item = Items[itemId]
-	if not item then
-		return 100
-	end
-
-	if item.CustomHP then
-		return item.CustomHP
-	end
-
-	return RarityBaseHP[item.Rarity] or 100
-end
-
-function ItemsModule.GetSellPrice(itemId: string): number
-	local item = Items[itemId]
-	if not item then
-		return 10
-	end
-
-	if item.SellPrice then
-		return item.SellPrice
-	end
-
-	return RarityBaseSellPrice[item.Rarity] or 10
-end
-
-function ItemsModule.GetMinDigPower(itemId: string): number
-	local item = Items[itemId]
-	if not item then
-		return 5
-	end
-
-	if item.MinDigPower then
-		return item.MinDigPower
-	end
-
-	return RarityBaseMinPower[item.Rarity] or 5
-end
-
-function ItemsModule.GetTimeLimit(itemId: string): number
-	local item = Items[itemId]
-	if not item then
-		return 15
-	end
-
-	if item.TimeLimit then
-		return item.TimeLimit
-	end
-
-	return RarityBaseTimeLimit[item.Rarity] or 15
-end
-
--- Mendapatkan berat 1 unit item (kg)
-function ItemsModule.GetItemWeight(itemId: string): number
-	local item = Items[itemId]
-	if not item then
-		return 1.0
-	end
-
-	if item.Weight then
-		return item.Weight
-	end
-
-	return RarityBaseWeight[item.Rarity] or 1.0
-end
-
--- Menghitung total berat seluruh isi inventaris (kg)
-function ItemsModule.GetTotalInventoryWeight(inventory: any): number
-	if not inventory or typeof(inventory) ~= "table" then
-		return 0
-	end
-
-	local totalWeight = 0
-
-	if #inventory > 0 then
-		-- Array inventaris berbasis UUID unik
-		for _, item in ipairs(inventory) do
-			if typeof(item) == "table" then
-				if item.Weight then
-					totalWeight += item.Weight
-				elseif item.ItemId then
-					totalWeight += ItemsModule.GetItemWeight(item.ItemId)
-				end
-			elseif typeof(item) == "string" then
-				totalWeight += ItemsModule.GetItemWeight(item)
-			end
-		end
-	else
-		-- Fallback key-value dictionary (legacy support)
-		for itemId, count in pairs(inventory) do
-			if typeof(count) == "number" and count > 0 then
-				local unitWeight = ItemsModule.GetItemWeight(itemId)
-				totalWeight += (unitWeight * count)
-			end
-		end
-	end
-
-	return totalWeight
-end
-
-function ItemsModule.GetRandomItem(islandId: string?, forcedTier: RarityType?, groundMaterial: string?): ItemDef
-	local candidateList: { ItemDef } = {}
-
-	for _, itemDef in Items do
-		if islandId and itemDef.IslandId and itemDef.IslandId ~= islandId then
-			continue
-		end
-
-		if forcedTier and itemDef.Rarity ~= forcedTier then
-			continue
-		end
-
-		if groundMaterial and itemDef.RequiredMaterial then
-			local reqMat = itemDef.RequiredMaterial
-			if type(reqMat) == "string" then
-				if reqMat ~= groundMaterial then
-					continue
-				end
-			elseif type(reqMat) == "table" then
-				if not table.find(reqMat :: { string }, groundMaterial) then
-					continue
-				end
-			end
-		end
-
-		table.insert(candidateList, itemDef)
-	end
-
-	-- Urutkan item dari yang paling langka (Chance terbesar) ke paling umum (Chance terkecil)
-	table.sort(candidateList, function(a, b)
-		return a.Chance > b.Chance
-	end)
-
-	-- Jika dipaksa mendapatkan tier tertentu (Admin/Dev Cheat / Potion Effect)
-	if forcedTier then
-		if #candidateList > 0 then
-			return candidateList[math.random(1, #candidateList)]
-		end
-	end
-
-	-- Evaluasi roll dari item terlangka (1/4M -> 1/3M -> 1/1M -> 1/2500 -> 1/2)
-	for _, itemDef in candidateList do
-		if itemDef.Chance <= 1 then
-			return itemDef
-		end
-
-		if math.random(1, itemDef.Chance) == 1 then
-			return itemDef
-		end
-	end
-
-	-- Jika semua roll misal di atas gagal, kembalikan item termudah
-	return candidateList[#candidateList] or Items["IronOre"]
-end
-
-return ItemsModule
+return {
+	Dict = Items,
+	ByIsland = ItemsByIsland,
+	IslandMaterials = IslandMaterials,
+	RarityBaseHP = RarityBaseHP,
+	RarityBaseSellPrice = RarityBaseSellPrice,
+	RarityBaseMinPower = RarityBaseMinPower,
+	RarityBaseTimeLimit = RarityBaseTimeLimit,
+	RarityDefaultWeights = RarityDefaultWeights,
+}

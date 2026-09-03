@@ -1,47 +1,190 @@
 --!strict
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Roact = require(ReplicatedStorage.Packages.Roact)
-local DigMinigame = require(script.Parent.Parent.Components.DigMinigame)
+local UserInputService = game:GetService("UserInputService")
+local packagesFolder = ReplicatedStorage:WaitForChild("Packages")
+local Roact = require(packagesFolder:WaitForChild("Roact"))
 
-local DigUIController = {}
+local clientFolder = script.Parent.Parent
+local componentsFolder = clientFolder:WaitForChild("Components")
+local DigMinigame = require(componentsFolder:WaitForChild("DigMinigame"))
+
+local remotesFolder = ReplicatedStorage:WaitForChild("Remotes")
+local startDigRF = remotesFolder:WaitForChild("StartDig") :: RemoteFunction
+local swingShovelRF = remotesFolder:WaitForChild("SwingShovel") :: RemoteFunction
+local cancelDigRE = remotesFolder:WaitForChild("CancelDig") :: RemoteEvent
+
+local DigController = {}
 local currentHandle: any = nil
+local isDigMinigameActive = false
+local activeInputConnection: RBXScriptConnection? = nil
+local onSwingExternalAction: (() -> ())? = nil
 
-function DigUIController.LockPlayerMovement()
+function DigController.IsMinigameActive(): boolean
+	return isDigMinigameActive
+end
+
+function DigController.GetSwingAction(): (() -> ())?
+	return onSwingExternalAction
+end
+
+function DigController.LockPlayerMovement()
 	local player = Players.LocalPlayer
 	local character = player.Character
 	if not character then
 		return
 	end
-
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
+	if humanoid then
+		humanoid.WalkSpeed = 0
+		humanoid.JumpHeight = 0
+		humanoid.JumpPower = 0
 	end
-
-	humanoid.WalkSpeed = 0
-	humanoid.JumpHeight = 0
-	humanoid.JumpPower = 0
 end
 
-function DigUIController.UnlockPlayerMovement()
+function DigController.UnlockPlayerMovement()
 	local player = Players.LocalPlayer
 	local character = player.Character
 	if not character then
 		return
 	end
-
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
+	if humanoid then
+		humanoid.WalkSpeed = 16
+		humanoid.JumpHeight = 7.2
+		humanoid.JumpPower = 50
+	end
+end
+
+local function CleanupInputConnection()
+	if activeInputConnection then
+		activeInputConnection:Disconnect()
+		activeInputConnection = nil
+	end
+end
+
+function DigController.UnmountMinigame()
+	CleanupInputConnection()
+	onSwingExternalAction = nil
+	DigController.UnlockPlayerMovement()
+
+	if currentHandle then
+		Roact.unmount(currentHandle)
+		currentHandle = nil
+	end
+end
+
+function DigController.CancelDig()
+	if not isDigMinigameActive then
+		return
+	end
+	CleanupInputConnection()
+	cancelDigRE:FireServer()
+	DigController.UnmountMinigame()
+	task.wait(0.15)
+	isDigMinigameActive = false
+end
+
+function DigController.MountMinigameUI(digData: any, isAutoMode: boolean?)
+	if not digData then
 		return
 	end
 
-	humanoid.WalkSpeed = 16
-	humanoid.JumpHeight = 7.2
-	humanoid.JumpPower = 50
+	CleanupInputConnection()
+	isDigMinigameActive = true
+
+	local currentHp = digData.CurrentHp
+	local maxHp = digData.MaxHp
+	local rarity = digData.Rarity
+	local itemName = digData.ItemName
+	local minDigPower = digData.MinDigPower
+	local shovelPower = digData.ShovelPower
+	local isTooWeak = digData.IsTooWeak
+	local timeLimit = digData.TimeLimit
+
+	local function OnCancelClicked()
+		DigController.CancelDig()
+	end
+
+	local function OnSwingClicked()
+		if isTooWeak then
+			return
+		end
+
+		local updatedState = swingShovelRF:InvokeServer()
+		if updatedState then
+			if updatedState.IsFinished then
+				CleanupInputConnection()
+
+				-- 1. Tampilkan bar 100% penuh sesaat
+				DigController.MountComponent(
+					rarity,
+					0,
+					updatedState.MaxHp or maxHp,
+					itemName,
+					minDigPower,
+					shovelPower,
+					isTooWeak,
+					timeLimit,
+					nil,
+					nil,
+					isAutoMode
+				)
+
+				task.wait(0.4)
+				DigController.UnmountMinigame()
+				task.wait(0.15)
+				isDigMinigameActive = false
+			else
+				DigController.MountComponent(
+					rarity,
+					updatedState.CurrentHp,
+					updatedState.MaxHp,
+					itemName,
+					minDigPower,
+					shovelPower,
+					isTooWeak,
+					timeLimit,
+					OnSwingClicked,
+					OnCancelClicked,
+					isAutoMode
+				)
+			end
+		else
+			DigController.UnmountMinigame()
+			task.wait(0.15)
+			isDigMinigameActive = false
+		end
+	end
+
+	onSwingExternalAction = OnSwingClicked
+
+	-- Bebas Klik di layar untuk mengayun sekop manual tanpa mengganggu tombol GUI lain
+	activeInputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then
+			return
+		end
+		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+			OnSwingClicked()
+		end
+	end)
+
+	DigController.MountComponent(
+		rarity,
+		currentHp,
+		maxHp,
+		itemName,
+		minDigPower,
+		shovelPower,
+		isTooWeak,
+		timeLimit,
+		OnSwingClicked,
+		OnCancelClicked,
+		isAutoMode
+	)
 end
 
-function DigUIController.MountMinigame(
+function DigController.MountComponent(
 	rarity: string,
 	currentHp: number,
 	maxHp: number,
@@ -51,12 +194,16 @@ function DigUIController.MountMinigame(
 	isTooWeak: boolean?,
 	timeLimit: number?,
 	onSwingCallback: (() -> ())?,
-	onCancelCallback: (() -> ())?
+	onCancelCallback: (() -> ())?,
+	isAutoMode: boolean?
 )
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
-	-- Lock movement in place while minigame is active
-	DigUIController.LockPlayerMovement()
+	if not isAutoMode then
+		DigController.LockPlayerMovement()
+	else
+		DigController.UnlockPlayerMovement()
+	end
 
 	local element = Roact.createElement(DigMinigame, {
 		Rarity = rarity,
@@ -78,14 +225,17 @@ function DigUIController.MountMinigame(
 	end
 end
 
-function DigUIController.UnmountMinigame()
-	-- Restore player movement when minigame finishes or cancels
-	DigUIController.UnlockPlayerMovement()
-
-	if currentHandle then
-		Roact.unmount(currentHandle)
-		currentHandle = nil
+function DigController.StartDig(luckMultiplier: number?, isAutoMode: boolean?): boolean
+	if isDigMinigameActive then
+		return false
 	end
+
+	local digData = startDigRF:InvokeServer(luckMultiplier)
+	if digData then
+		DigController.MountMinigameUI(digData, isAutoMode)
+		return true
+	end
+	return false
 end
 
-return DigUIController
+return DigController

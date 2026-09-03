@@ -2,8 +2,12 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Packages = ReplicatedStorage:WaitForChild("Packages")
 local Roact = require(Packages:WaitForChild("Roact"))
-local Items = require(ReplicatedStorage.Shared.Data.Items) :: any
-local LevelConfig = require(ReplicatedStorage.Shared.Data.LevelConfig) :: any
+local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
+local dataFolder = sharedFolder:WaitForChild("Data")
+local commonFolder = sharedFolder:WaitForChild("Common")
+local Items = require(dataFolder:WaitForChild("Items")) :: any
+local ItemHelper = require(commonFolder:WaitForChild("ItemHelper")) :: any
+local LevelConfig = require(dataFolder:WaitForChild("LevelConfig")) :: any
 
 local InventoryGui = Roact.Component:extend("InventoryGui")
 
@@ -32,7 +36,6 @@ function InventoryGui:render()
 
 	local visibleLimit = self.state.visibleLimit or 36
 	local maxCapacity = LevelConfig.GetMaxInventoryCapacity(level)
-	local maxWeight = LevelConfig.GetMaxWeightCapacity(level)
 	local totalItems = 0
 	local totalWeight = 0
 	local totalValue = 0
@@ -41,10 +44,10 @@ function InventoryGui:render()
 	for index, itemData in ipairs(inventory) do
 		local itemId = if typeof(itemData) == "table" then itemData.ItemId else itemData
 		local uuid = if typeof(itemData) == "table" then itemData.UUID else tostring(index)
-		local weight = if typeof(itemData) == "table" and itemData.Weight then itemData.Weight else Items.GetItemWeight(itemId)
+		local weight = if typeof(itemData) == "table" and itemData.Weight then itemData.Weight else ItemHelper.GetItemWeight(itemId)
 
 		totalItems += 1
-		local unitPrice = Items.GetSellPrice(itemId)
+		local unitPrice = ItemHelper.GetSellPrice(itemId)
 		totalValue += unitPrice
 		totalWeight += weight
 
@@ -53,6 +56,9 @@ function InventoryGui:render()
 			local itemDef = Items.Dict[itemId] or { Name = itemId, Rarity = "Common" }
 			local rarityColor = RarityColors[itemDef.Rarity] or RarityColors.Common
 			local cardKey = uuid or string.format("%s_%d", itemId, index)
+
+			local isGiant = ItemHelper.IsMaxTon(itemId, weight)
+			local weightTag = if isGiant then string.format("🌟 MAX TON (%.1fkg)", weight) else string.format("⚖️ %.1fkg", weight)
 
 			itemCards[cardKey] = Roact.createElement("Frame", {
 				BackgroundColor3 = Color3.fromRGB(28, 33, 46),
@@ -76,13 +82,13 @@ function InventoryGui:render()
 					TextXAlignment = Enum.TextXAlignment.Left,
 				}),
 
-				-- Rarity Tag, Unit Price & Unit Weight
+				-- Rarity Tag, Unit Price & Unit Weight (Termasuk Indikator MAX TON)
 				DetailsLabel = Roact.createElement("TextLabel", {
 					Position = UDim2.fromOffset(10, 36),
 					Size = UDim2.new(1, -20, 0, 20),
 					BackgroundTransparency = 1,
-					Text = string.format("%s • 💰 %d • ⚖️ %.1fkg", string.upper(itemDef.Rarity), unitPrice, weight),
-					TextColor3 = rarityColor,
+					Text = string.format("%s • 💰 %d • %s", string.upper(itemDef.Rarity), unitPrice, weightTag),
+					TextColor3 = isGiant and Color3.fromRGB(255, 215, 0) or rarityColor,
 					TextSize = 10,
 					Font = Enum.Font.GothamMedium,
 					TextXAlignment = Enum.TextXAlignment.Left,
@@ -166,8 +172,8 @@ function InventoryGui:render()
 					CapacityText = Roact.createElement("TextLabel", {
 						Size = UDim2.fromScale(1, 1),
 						BackgroundTransparency = 1,
-						Text = string.format("📦 %d/%d • ⚖️ %.1f/%.1fkg", totalItems, maxCapacity, totalWeight, maxWeight),
-						TextColor3 = (totalItems >= maxCapacity or totalWeight >= maxWeight) and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(46, 204, 113),
+						Text = string.format("📦 %d/%d • ⚖️ %.1fkg", totalItems, maxCapacity, totalWeight),
+						TextColor3 = isFull and Color3.fromRGB(231, 76, 60) or Color3.fromRGB(46, 204, 113),
 						TextSize = 11,
 						Font = Enum.Font.GothamBold,
 					}),
