@@ -6,24 +6,36 @@ export type ShovelDef = {
 	SwingCooldown: number,
 	Price: number,
 	LuckBonus: number?, -- Bonus luck sekop (contoh: 0.25 = +25% Luck, 1.0 = +100% Luck)
+	Icon: string?, -- Asset ID icon sekop
 }
 
 local Shovels: { [string]: ShovelDef } = {
 	["WoodenShovel"] = {
 		Id = "WoodenShovel",
 		Name = "Wooden Shovel",
-		DigPower = 10,
+		DigPower = 45,
 		SwingCooldown = 0.5,
 		Price = 0,
 		LuckBonus = 0,
+		Icon = "rbxassetid://0",
 	},
 	["IronShovel"] = {
 		Id = "IronShovel",
 		Name = "Iron Shovel",
-		DigPower = 25,
+		DigPower = 75,
 		SwingCooldown = 0.4,
-		Price = 500,
-		LuckBonus = 0.25, -- +25% Luck
+		Price = 250,
+		LuckBonus = 1.25, -- +25% Luck
+		Icon = "rbxassetid://0",
+	},
+	["StandardShovel"] = {
+		Id = "StandardShovel",
+		Name = "Standard Shovel",
+		DigPower = 75,
+		SwingCooldown = 0.4,
+		Price = 250,
+		LuckBonus = 1.25, -- +25% Luck
+		Icon = "rbxassetid://0",
 	},
 	-- ["MythicShovel"] = {
 	-- 	Id = "MythicShovel",

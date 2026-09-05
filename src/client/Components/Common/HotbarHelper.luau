@@ -9,12 +9,17 @@ export type ItemSlotData = {
 	FallbackEmoji: string?,
 }
 
--- Filter item slots valid (maksimal 4 item untuk slot 4 hingga 7)
-function HotbarHelper.FilterValidItemSlots(itemSlots: { any }?): { ItemSlotData }
+-- Default kapasitas slot item dinamis pada Hotbar (Slot 4 dst.)
+HotbarHelper.DEFAULT_MAX_ITEM_SLOTS = 4
+
+-- Filter item slots valid dengan batas slot yang dapat dikonfigurasi
+function HotbarHelper.FilterValidItemSlots(itemSlots: { any }?, maxSlots: number?): { ItemSlotData }
 	local validSlots: { ItemSlotData } = {}
 	if not itemSlots then
 		return validSlots
 	end
+
+	local maxCount = maxSlots or HotbarHelper.DEFAULT_MAX_ITEM_SLOTS
 
 	for _, itemData in ipairs(itemSlots) do
 		local itemId = if typeof(itemData) == "table" then (itemData.ItemId or "") else tostring(itemData)
@@ -25,7 +30,7 @@ function HotbarHelper.FilterValidItemSlots(itemSlots: { any }?): { ItemSlotData 
 			then itemData.FallbackEmoji
 			else "💎"
 
-		if itemId ~= "" and count > 0 and #validSlots < 4 then
+		if itemId ~= "" and count > 0 and #validSlots < maxCount then
 			table.insert(validSlots, {
 				UUID = uuid,
 				ItemId = itemId,

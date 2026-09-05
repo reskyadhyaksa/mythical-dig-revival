@@ -144,7 +144,24 @@ function HoldPowerController.ReleaseHold()
 	-- Sembunyikan bar
 	HoldPowerController.Update(0, 1.0, false)
 
-	-- Tampilkan pop-up melayang di atas kepala karakter
+	local isDiggable = true
+	local DigController: any = nil
+	pcall(function()
+		DigController = require(clientFolder:WaitForChild("Controllers"):WaitForChild("DigController")) :: any
+		if DigController and DigController.IsGroundDiggable then
+			isDiggable = DigController.IsGroundDiggable()
+		end
+	end)
+
+	if not isDiggable then
+		if DigController and DigController.ShowInvalidGroundNotice then
+			DigController.ShowInvalidGroundNotice("⚠️ Cannot dig here! Invalid ground material.")
+		end
+		onReleaseAction = nil
+		return
+	end
+
+	-- Tampilkan pop-up melayang di atas kepala karakter hanya jika tanah valid untuk digali
 	local localPlayer = Players.LocalPlayer
 	if localPlayer and localPlayer.Character and progress >= 0.20 then
 		HoldPowerController.ShowLuckPopup(localPlayer.Character, tier.Name .. "!", tier.Color)

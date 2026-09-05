@@ -1,7 +1,7 @@
 --!strict
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Assets = ReplicatedStorage:FindFirstChild("Assets")
+local Assets = ReplicatedStorage:WaitForChild("Assets") :: Instance
 local sharedFolder = ReplicatedStorage:WaitForChild("Shared")
 local ItemHelper = require(sharedFolder:WaitForChild("Common"):WaitForChild("ItemHelper")) :: any
 
@@ -47,7 +47,7 @@ function InventoryService.AddItem(playerProfile: any, itemId: string, customWeig
 	end
 
 	local uuid = HttpService:GenerateGUID(false)
-	local weight = customWeight or Items.GetItemWeight(itemId)
+	local weight = customWeight or ItemHelper.GetItemWeight(itemId)
 
 	local newItem: InventoryItem = {
 		UUID = uuid,
@@ -61,12 +61,18 @@ function InventoryService.AddItem(playerProfile: any, itemId: string, customWeig
 	return newItem
 end
 
-function InventoryService.AutoWeldTool(tool: Tool)
+function InventoryService.AutoWeldTool(tool: any)
+	if tool:IsA("Tool") then
+		tool.RequiresHandle = false
+		tool.CanBeDropped = false
+	end
+
 	local handle = tool:FindFirstChild("Handle") :: BasePart?
 	if not handle then
 		local altPart = tool:FindFirstChildWhichIsA("BasePart", true)
 		if altPart then
 			altPart.Name = "Handle"
+			altPart.Parent = tool
 			handle = altPart
 		end
 	end
@@ -81,6 +87,19 @@ function InventoryService.AutoWeldTool(tool: Tool)
 	handle.CanQuery = false
 	handle.Massless = true
 
+	-- Pastikan Motor6D sudah ada di dalam Handle sesuai struktur Tool
+	local existingMotor = handle:FindFirstChild("Motor6D") or handle:FindFirstChildOfClass("Motor6D")
+	local motor: Motor6D
+	if existingMotor and existingMotor:IsA("Motor6D") then
+		motor = existingMotor
+	else
+		local newMotor = Instance.new("Motor6D")
+		newMotor.Name = "Motor6D"
+		newMotor.Parent = handle
+		motor = newMotor
+	end
+	motor.Part1 = handle
+
 	for _, descendant in tool:GetDescendants() do
 		if descendant:IsA("BasePart") then
 			descendant.Anchored = false
@@ -93,6 +112,7 @@ function InventoryService.AutoWeldTool(tool: Tool)
 				local existingWeld = descendant:FindFirstChildOfClass("WeldConstraint") or descendant:FindFirstChildOfClass("Weld") or descendant:FindFirstChildOfClass("Motor6D")
 				if not existingWeld then
 					local weld = Instance.new("WeldConstraint")
+					weld.Name = "Primary"
 					weld.Part0 = handle
 					weld.Part1 = descendant
 					weld.Parent = descendant
@@ -102,69 +122,116 @@ function InventoryService.AutoWeldTool(tool: Tool)
 	end
 end
 
+-- Listener Server-side untuk memastikan Tool terhubung ke tangan karakter via Motor6D
+function InventoryService.SetupCharacterToolListener(character: Model)
+	local function OnChildAdded(child: Instance)
+		if child:IsA("Tool") then
+			child.RequiresHandle = false
+			child.CanBeDropped = false
+
+			local handle = child:FindFirstChild("Handle") :: BasePart?
+			if not handle then
+				handle = child:FindFirstChildWhichIsA("BasePart", true)
+			end
+			local arm = character:FindFirstChild("Right Arm") or character:FindFirstChild("RightHand") or character:FindFirstChild("RightUpperArm")
+			if handle and arm then
+				for _, desc in child:GetDescendants() do
+					if desc:IsA("BasePart") then
+						desc.Anchored = false
+						desc.CanCollide = false
+					end
+				end
+
+				local foundMotor = handle:FindFirstChild("Motor6D") or handle:FindFirstChildOfClass("Motor6D")
+				local motor: Motor6D
+				if foundMotor and foundMotor:IsA("Motor6D") then
+					motor = foundMotor
+				else
+					local newMotor = Instance.new("Motor6D")
+					newMotor.Name = "Motor6D"
+					newMotor.Parent = handle
+					motor = newMotor
+				end
+				motor.Part1 = handle
+				motor.Part0 = arm :: BasePart
+
+				task.defer(function()
+					local rightGrip = arm:FindFirstChild("RightGrip") or handle:FindFirstChild("RightGrip")
+					if rightGrip and (rightGrip:IsA("Weld") or rightGrip:IsA("ManualWeld")) then
+						(rightGrip :: any).Enabled = false
+					end
+				end)
+			end
+		end
+	end
+
+	character.ChildAdded:Connect(OnChildAdded)
+
+	for _, child in character:GetChildren() do
+		if child:IsA("Tool") then
+			OnChildAdded(child)
+		end
+	end
+end
+
 function InventoryService.GiveShovelToBackpack(player: Player, shovelId: string)
 	local backpack = player:FindFirstChildOfClass("Backpack")
 	local character = player.Character
 
-	-- Hapus sekop/tool lama di Backpack
+	-- Hapus sekop lama di Backpack
 	if backpack then
 		for _, child in backpack:GetChildren() do
-			if child:IsA("Tool") then
+			if child.Name:find("Shovel") or child.Name:find("Sekop") or child.Name == shovelId then
 				child:Destroy()
 			end
 		end
 	end
 
-	-- Hapus tool lama yang sedang dipegang di Character
+	-- Hapus sekop lama yang sedang dipegang di Character
 	local wasHolding = false
 	if character then
 		for _, child in character:GetChildren() do
-			if child:IsA("Tool") then
+			if (child:IsA("Tool") or child:IsA("Model")) and (child.Name:find("Shovel") or child.Name:find("Sekop") or child.Name == shovelId) then
 				wasHolding = true
 				child:Destroy()
 			end
 		end
 	end
 
-	local shovelTool: Tool? = nil
-	if Assets then
-		local shovelsFolder = Assets:FindFirstChild("Shovels")
-		if shovelsFolder then
-			local shovelTemplate = shovelsFolder:FindFirstChild(shovelId, true)
-			if shovelTemplate then
-				local shovelClone = shovelTemplate:Clone()
-				if shovelClone:IsA("Tool") then
-					InventoryService.AutoWeldTool(shovelClone)
-					shovelTool = shovelClone
-				end
-			end
+	local shovelClone: any = nil
+	local shovelsFolder = Assets:FindFirstChild("Shovels")
+	if shovelsFolder then
+		local shovelTemplate = shovelsFolder:FindFirstChild(shovelId, true)
+		if shovelTemplate then
+			shovelClone = shovelTemplate:Clone()
 		end
 	end
 
-	-- Fallback tool jika model 3D di Assets belum ada
-	if not shovelTool then
-		local newTool = Instance.new("Tool")
-		newTool.Name = shovelId
-		newTool.RequiresHandle = false
-		newTool.CanBeDropped = false
-		local handle = Instance.new("Part")
-		handle.Name = "Handle"
-		handle.Size = Vector3.new(1, 4, 1)
-		handle.Color = if shovelId == "IronShovel" then Color3.fromRGB(180, 190, 200) else Color3.fromRGB(140, 90, 50)
-		handle.Material = if shovelId == "IronShovel" then Enum.Material.Metal else Enum.Material.Wood
-		handle.Parent = newTool
-		InventoryService.AutoWeldTool(newTool)
-		shovelTool = newTool
-	end
-
-	if shovelTool and backpack then
-		shovelTool.Parent = backpack
-		-- Jika sebelumnya pemain sedang memegang sekop, pasang sekop baru langsung ke tangan
-		if wasHolding and character then
-			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			if humanoid then
-				humanoid:EquipTool(shovelTool)
+	if shovelClone then
+		if shovelClone:IsA("Tool") then
+			InventoryService.AutoWeldTool(shovelClone)
+		else
+			-- Unanchor semua part di dalam sekop agar tidak tertinggal di koordinat (0,0,0) / ghaib
+			for _, desc in shovelClone:GetDescendants() do
+				if desc:IsA("BasePart") then
+					desc.Anchored = false
+					desc.CanCollide = false
+					desc.CanTouch = false
+					desc.CanQuery = false
+				end
 			end
+		end
+
+		if shovelClone:IsA("Tool") and backpack then
+			shovelClone.Parent = backpack
+			if wasHolding and character then
+				local humanoid = character:FindFirstChildOfClass("Humanoid")
+				if humanoid then
+					humanoid:EquipTool(shovelClone)
+				end
+			end
+		elseif character then
+			shovelClone.Parent = character
 		end
 	end
 end
@@ -176,45 +243,48 @@ function InventoryService.EquipShovelModel(character: Model, shovelId: string)
 	local backpack = player and player:FindFirstChildOfClass("Backpack")
 
 	for _, child in character:GetChildren() do
-		if child:IsA("Tool") then
+		if child:IsA("Tool") or child.Name:find("Shovel") or child.Name:find("Sekop") or child.Name == shovelId then
 			child:Destroy()
 		end
 	end
 
 	if backpack then
 		for _, child in backpack:GetChildren() do
-			if child:IsA("Tool") then
+			if child:IsA("Tool") or child.Name:find("Shovel") or child.Name:find("Sekop") or child.Name == shovelId then
 				child:Destroy()
 			end
 		end
 	end
 
-	if not Assets then
-		return
-	end
-
 	local shovelsFolder = Assets:FindFirstChild("Shovels")
-	if not shovelsFolder then
-		return
-	end
+	if shovelsFolder then
+		local shovelTemplate = shovelsFolder:FindFirstChild(shovelId, true)
+		if shovelTemplate then
+			local shovelClone: any = shovelTemplate:Clone()
+			if shovelClone:IsA("Tool") then
+				InventoryService.AutoWeldTool(shovelClone)
+			else
+				for _, desc in shovelClone:GetDescendants() do
+					if desc:IsA("BasePart") then
+						desc.Anchored = false
+						desc.CanCollide = false
+						desc.CanTouch = false
+						desc.CanQuery = false
+					end
+				end
+			end
 
-	local shovelTemplate = shovelsFolder:FindFirstChild(shovelId, true)
-	if shovelTemplate then
-		local shovelClone = shovelTemplate:Clone()
-		if shovelClone:IsA("Tool") then
-			InventoryService.AutoWeldTool(shovelClone)
-		end
-
-		if backpack and humanoid then
-			shovelClone.Parent = backpack
-			humanoid:EquipTool(shovelClone)
-		else
-			shovelClone.Parent = character
+			if shovelClone:IsA("Tool") and backpack and humanoid then
+				shovelClone.Parent = backpack
+				humanoid:EquipTool(shovelClone)
+			else
+				shovelClone.Parent = character
+			end
 		end
 	end
 end
 
--- Equip Item dari ReplicatedStorage.Assets.Items dengan Skala Ukuran Proporsional & Motor6D
+-- Equip Item dari ReplicatedStorage.Assets.Items dengan Skala Ukuran Proporsional & Standar Tool Grip
 function InventoryService.EquipItemModel(character: Model, itemId: string, uuid: string?, customWeight: number?)
 	local Players = game:GetService("Players")
 	local player = Players:GetPlayerFromCharacter(character)
@@ -243,8 +313,8 @@ function InventoryService.EquipItemModel(character: Model, itemId: string, uuid:
 	end
 
 	local itemTool: Tool? = nil
-	local weight = customWeight or Items.GetItemWeight(itemId)
-	local rawScale = Items.GetScaleFactor(itemId, weight)
+	local weight = customWeight or ItemHelper.GetItemWeight(itemId)
+	local rawScale = ItemHelper.GetScaleFactor(itemId, weight)
 
 	print(string.format("✋ Equipping %s (Weight: %.2f kg | Scale: %.3fx)", itemId, weight, rawScale))
 
@@ -255,7 +325,7 @@ function InventoryService.EquipItemModel(character: Model, itemId: string, uuid:
 			local newTool = Instance.new("Tool")
 			newTool.Name = itemId
 			newTool.CanBeDropped = false
-			newTool.RequiresHandle = false
+			newTool.RequiresHandle = true
 
 			local clone = itemTemplate:Clone()
 
@@ -263,23 +333,32 @@ function InventoryService.EquipItemModel(character: Model, itemId: string, uuid:
 			if clone:IsA("Model") then
 				local baseScale = clone:GetScale()
 				clone:ScaleTo(baseScale * rawScale)
+
+				local handlePart = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart", true)
+				if handlePart then
+					handlePart.Name = "Handle"
+					handlePart.Parent = newTool
+					clone.Parent = newTool
+				else
+					local invHandle = Instance.new("Part")
+					invHandle.Name = "Handle"
+					invHandle.Size = Vector3.new(0.5, 0.5, 0.5)
+					invHandle.Transparency = 1
+					invHandle.CanCollide = false
+					invHandle.Parent = newTool
+					clone.Parent = newTool
+				end
 			elseif clone:IsA("BasePart") then
+				clone.Name = "Handle"
 				clone.Size = clone.Size * rawScale
+				clone.Parent = newTool
+			elseif clone:IsA("Tool") then
+				for _, part in clone:GetChildren() do
+					part.Parent = newTool
+				end
+				clone:Destroy()
 			end
 
-			-- Pastikan part utama dinamai Handle
-			local handlePart: BasePart? = nil
-			if clone:IsA("Model") then
-				handlePart = clone.PrimaryPart or clone:FindFirstChildWhichIsA("BasePart", true)
-			elseif clone:IsA("BasePart") then
-				handlePart = clone
-			end
-
-			if handlePart then
-				handlePart.Name = "Handle"
-			end
-
-			clone.Parent = newTool
 			InventoryService.AutoWeldTool(newTool)
 			itemTool = newTool
 		end
@@ -290,7 +369,7 @@ function InventoryService.EquipItemModel(character: Model, itemId: string, uuid:
 		local newTool = Instance.new("Tool")
 		newTool.Name = itemId
 		newTool.CanBeDropped = false
-		newTool.RequiresHandle = false
+		newTool.RequiresHandle = true
 		local handle = Instance.new("Part")
 		handle.Name = "Handle"
 		handle.Size = Vector3.new(0.8, 0.8, 0.8) * math.clamp(rawScale, 0.7, 1.5)
@@ -306,37 +385,25 @@ function InventoryService.EquipItemModel(character: Model, itemId: string, uuid:
 			itemTool:SetAttribute("UUID", uuid)
 		end
 
-		local handle = (itemTool:FindFirstChild("Handle", true) or itemTool:FindFirstChildWhichIsA("BasePart", true)) :: BasePart?
-		local rightHand = (character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")) :: BasePart?
-
-		-- Pasang ke backpack & equip melalui humanoid
+		-- Pasang ke backpack & equip melalui humanoid (Roblox akan otomatis membuat RightGrip & mengaktifkan pose memegang tool)
 		if backpack and humanoid then
 			itemTool.Parent = backpack
 			humanoid:EquipTool(itemTool)
 		else
 			itemTool.Parent = character
 		end
-
-		-- Pasang Motor6D ke tangan kanan agar posisinya stabil, tidak bug, dan tersambung kuat
-		if rightHand and handle then
-			-- Hapus default RightGrip Roblox agar tidak bertabrakan dengan Motor6D
-			local defaultGrip = rightHand:FindFirstChild("RightGrip")
-			if defaultGrip then
-				defaultGrip:Destroy()
-			end
-
-			local motor6D = Instance.new("Motor6D")
-			motor6D.Name = "ItemMotor6D"
-			motor6D.Part0 = rightHand
-			motor6D.Part1 = handle
-			-- Posisi rapi di telapak tangan
-			motor6D.C0 = CFrame.new(0, -0.3, -0.2) * CFrame.Angles(math.rad(-90), 0, 0)
-			motor6D.Parent = rightHand
-		end
 	end
 end
 
 function InventoryService.EquipShovel(player: Player, playerProfile: any, shovelId: string)
+	if not playerProfile or not playerProfile.Data then
+		return false
+	end
+
+	if typeof(playerProfile.Data.OwnedShovels) ~= "table" then
+		playerProfile.Data.OwnedShovels = { "WoodenShovel" }
+	end
+
 	local hasShovel = table.find(playerProfile.Data.OwnedShovels, shovelId) ~= nil
 
 	if hasShovel then

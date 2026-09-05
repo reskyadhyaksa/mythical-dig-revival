@@ -25,6 +25,8 @@ function HotbarSlot:render()
 	local hasImage = image ~= "" and image ~= "rbxassetid://0"
 	local count = self.props.Count
 	local sizeButton = if deviceType == "Mobile" then UDim2.fromScale(1, 1) else UDim2.fromScale(0.85, 0.85)
+	local thicknessMobile = if isActive then 2 else 1
+	local thicknessOther = if isActive then 4 else 3
 
 	local iconPosition = self.props.IconPosition or UDim2.fromScale(0.5, 0.52)
 	local iconSizeProp = self.props.IconSize
@@ -81,16 +83,16 @@ function HotbarSlot:render()
 		-- 3. Linear Gradient dari Atas (#59C5F3) ke Bawah (#1C9DDE)
 		UIGradient = Roact.createElement("UIGradient", {
 			Color = ColorSequence.new({
-				ColorSequenceKeypoint.new(0.0, Color3.fromHex("59C5F3")), -- Top
-				ColorSequenceKeypoint.new(1.0, Color3.fromHex("1C9DDE")), -- Bottom
+				ColorSequenceKeypoint.new(0.0, Color3.fromHex("#00a9f1")), -- Top
+				ColorSequenceKeypoint.new(1.0, Color3.fromHex("#036291")), -- Bottom
 			}),
 			Rotation = 90,
 		}),
 
 		-- 4. Outline Luar (Thickness 1)
 		UIStroke = Roact.createElement("UIStroke", {
-			Color = if isActive then Color3.fromRGB(255, 255, 255) else Color3.fromHex("27A4E2"),
-			Thickness = if isActive then 2 else 1,
+			Color = if isActive then Color3.fromRGB(255, 255, 255) else Color3.fromHex("#073f5b"),
+			Thickness = if deviceType == "Mobile" then thicknessMobile else thicknessOther,
 			ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		}),
 
@@ -139,7 +141,7 @@ function HotbarSlot:render()
 			}),
 			KeyText = Roact.createElement("TextLabel", {
 				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.fromScale(0.5, 0.5),
+				Position = UDim2.fromScale(0.5, 0.6),
 				Size = UDim2.fromScale(0.85, 0.85),
 				BackgroundTransparency = 1,
 				Text = keyText,

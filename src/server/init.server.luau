@@ -170,6 +170,10 @@ buyShovelRE.OnServerEvent:Connect(function(player: Player, shovelId: string)
 	local shovelDef = Shovels.GetShovel(shovelId)
 	if not shovelDef then return end
 
+	if typeof(profile.Data.OwnedShovels) ~= "table" then
+		profile.Data.OwnedShovels = { "WoodenShovel" }
+	end
+
 	local isOwned = table.find(profile.Data.OwnedShovels, shovelId) ~= nil
 	if isOwned then return end
 
@@ -206,6 +210,7 @@ local function OnPlayerAdded(player: Player)
 
 	-- Taruh sekop di Backpack & buat Overhead Nameplate saat karakter player muncul/respawn (tanpa auto-equip ke tangan)
 	player.CharacterAdded:Connect(function(character: Model)
+		InventoryService.SetupCharacterToolListener(character)
 		task.wait(0.2)
 		local currentProfile = DataService.GetProfile(player)
 		if currentProfile and currentProfile.Data then
@@ -217,6 +222,7 @@ local function OnPlayerAdded(player: Player)
 	end)
 
 	if player.Character then
+		InventoryService.SetupCharacterToolListener(player.Character)
 		local equippedShovel = profile and profile.Data and profile.Data.EquippedShovel or "WoodenShovel"
 		local level = profile and profile.Data and profile.Data.Level or 0
 		InventoryService.GiveShovelToBackpack(player, equippedShovel)

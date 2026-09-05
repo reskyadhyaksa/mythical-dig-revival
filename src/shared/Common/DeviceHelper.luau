@@ -37,7 +37,6 @@ function DeviceHelper.GetDeviceType(): "Mobile" | "Tablet" | "Console" | "PC"
 		end
 	end
 
-	print("PC BOY")
 	return "PC"
 end
 

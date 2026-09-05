@@ -20,6 +20,7 @@ local AutoDigController = require(Controllers:WaitForChild("AutoDigController"))
 local ToolController = require(Controllers:WaitForChild("ToolController")) :: any
 local InventoryController = require(Controllers:WaitForChild("InventoryController")) :: any
 local ShopController = require(Controllers:WaitForChild("ShopController")) :: any
+local MobileDigController = require(Controllers:WaitForChild("MobileDigController")) :: any
 
 -- 3. Remotes
 local remotesFolder = ReplicatedStorage:WaitForChild("Remotes")
@@ -42,12 +43,14 @@ Store.changed:connect(function(state)
 	if ShopController.IsOpen() then
 		ShopController.MountOrUpdate()
 	end
+	MobileDigController.Update()
 end)
 
 -- 5. Mount Initial HUDs
 StatsHudController.MountStatsHud()
 HoldPowerController.MountHoldBar()
 CompassController.MountCompass()
+MobileDigController.Mount()
 
 HotbarController.MountHotbar(
 	ToolController.ToggleShovel,

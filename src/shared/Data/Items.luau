@@ -11,6 +11,7 @@ export type ItemDef = {
 	Name: string,
 	Rarity: RarityType,
 	Chance: number,
+	Icon: string?, -- Asset ID icon item (contoh: "rbxassetid://0")
 	CustomHP: number?,
 	IslandId: string?,
 	RequiredMaterial: (string | { string })?,
@@ -42,7 +43,7 @@ local RarityBaseSellPrice: { [RarityType]: number } = {
 
 local RarityBaseMinPower: { [RarityType]: number } = {
 	Common = 5,
-	Uncommon = 15,
+	Uncommon = 10,
 	Rare = 35,
 	Epic = 60,
 	Legendary = 90,
@@ -81,6 +82,7 @@ local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 			Name = "Ancient Nail",
 			Rarity = "Common",
 			Chance = 2,
+			Icon = "rbxassetid://0",
 		},
 		["RabbitSkeleton"] = {
 			Id = "RabbitSkeleton",
@@ -88,12 +90,14 @@ local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 			Rarity = "Uncommon",
 			Chance = 2,
 			MaxWeight = 10,
+			Icon = "rbxassetid://0",
 		},
 		["RavenSkeleton"] = {
 			Id = "RavenSkeleton",
 			Name = "Raven Skeleton",
 			Rarity = "Uncommon",
 			Chance = 1000,
+			Icon = "rbxassetid://0",
 			-- RequiredMaterial = "Slate",
 		},
 		["StoneGolem"] = {
@@ -101,6 +105,7 @@ local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 			Name = "Stone Golem",
 			Rarity = "Uncommon",
 			Chance = 2500,
+			Icon = "rbxassetid://0",
 		},
 	},
 
@@ -111,6 +116,7 @@ local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 			Rarity = "Secret",
 			Chance = 1_000_000,
 			CustomHP = 50000,
+			Icon = "rbxassetid://0",
 		},
 		["WyvernRightArmBone"] = {
 			Id = "WyvernRightArmBone",
@@ -118,6 +124,7 @@ local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 			Rarity = "Secret",
 			Chance = 3_000_000,
 			CustomHP = 75000,
+			Icon = "rbxassetid://0",
 		},
 		["WyvernLeftArmBone"] = {
 			Id = "WyvernLeftArmBone",
@@ -125,6 +132,7 @@ local ItemsByIsland: { [string]: { [string]: ItemDef } } = {
 			Rarity = "Secret",
 			Chance = 4_000_000,
 			CustomHP = 100000,
+			Icon = "rbxassetid://0",
 		},
 	},
 }

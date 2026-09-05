@@ -13,8 +13,8 @@ export type ItemSlotData = HotbarHelper.ItemSlotData
 
 local ASSET_IMAGES = {
 	Shovel = "rbxassetid://89491227108779",
-	Inventory = "rbxassetid://132406087548548",
-	Shop = "rbxassetid://131110815703277",
+	Inventory = "rbxassetid://103164704580526",
+	Shop = "rbxassetid://90299548253286",
 }
 
 local HotbarGui = Roact.Component:extend("HotbarGui")
@@ -34,15 +34,17 @@ function HotbarGui:render()
 	local onEquipItem = self.props.OnEquipItem
 	local onToggleAuto = self.props.OnToggleAuto
 
-	local validItemSlots = HotbarHelper.FilterValidItemSlots(self.props.ItemSlots)
+	local maxItemSlots = self.props.MaxItemSlots
+	local validItemSlots = HotbarHelper.FilterValidItemSlots(self.props.ItemSlots, maxItemSlots)
 	local totalVisibleSlots = 3 + #validItemSlots
 	local wrapperWidthScale = HotbarHelper.CalculateWrapperWidth(totalVisibleSlots)
-	local wrapperHeightScale = if deviceType == "Mobile" then 0.15 else 0.095
+	local wrapperHeightScale = if deviceType == "Mobile" then 0.125 else 0.095
+	local listGap = if deviceType == "Mobile" then UDim.new(0.06, 0) else UDim.new(0.05, 0)
 
 	local slotChildren: { [string]: any } = {
 		UIListLayout = Roact.createElement("UIListLayout", {
 			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0.03, 0),
+			Padding = listGap,
 			HorizontalAlignment = Enum.HorizontalAlignment.Center,
 			VerticalAlignment = Enum.VerticalAlignment.Center,
 			FillDirection = Enum.FillDirection.Horizontal,
@@ -115,7 +117,7 @@ function HotbarGui:render()
 			IsActive = isAutoActive,
 			OnToggle = onToggleAuto,
 			-- Position = UDim2.fromScale(0.5, 0.86),
-			Position = if deviceType == "Mobile" then UDim2.fromScale(0.5, 0.78) else UDim2.fromScale(0.5, 0.86),
+			Position = if deviceType == "Mobile" then UDim2.fromScale(0.5, 0.81) else UDim2.fromScale(0.5, 0.86),
 			Size = if deviceType == "Mobile" then UDim2.fromScale(0.1, 0.07) else UDim2.fromScale(0.12, 0.045),
 		}),
 
